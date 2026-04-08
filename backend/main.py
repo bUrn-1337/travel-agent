@@ -3,6 +3,7 @@ Travel Agent API — Prototype 1 + RAG
 FastAPI backend: hybrid search (full-text + semantic) + composite ranking + RAG generation.
 """
 import json
+import os
 import sys
 import logging
 from pathlib import Path
@@ -21,11 +22,32 @@ from search.minsearch import Index
 from rag.embedder import build_index, semantic_scores
 from rag.vector_store import chunk_count
 from rag.pipeline import stream_travel_plan, get_travel_plan_json
+from rag.retriever import retrieve_for_plan
 from ranking.scorer import rank_destinations
 from ranking.cost_estimator import estimate_trip_cost
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Simple in-memory plan cache  key → plan dict
+# Keyed by (dest_id, days, budget_tier, group_type, vibes_tuple)
+# ---------------------------------------------------------------------------
+_PLAN_CACHE: dict[tuple, dict] = {}
+_MAX_CACHE  = 200   # evict oldest when full
+
+def _cache_key(dest_id: str, days: int, budget: float, group: str, vibes: list[str]) -> tuple:
+    budget_tier = int(budget // 500) * 500   # round to nearest 500
+    return (dest_id, days, budget_tier, group, tuple(sorted(vibes)))
+
+def _cache_get(key: tuple) -> dict | None:
+    return _PLAN_CACHE.get(key)
+
+def _cache_set(key: tuple, value: dict) -> None:
+    if len(_PLAN_CACHE) >= _MAX_CACHE:
+        oldest = next(iter(_PLAN_CACHE))
+        del _PLAN_CACHE[oldest]
+    _PLAN_CACHE[key] = value
 
 # ---------------------------------------------------------------------------
 # Data loading
@@ -319,14 +341,20 @@ async def generate_structured(req: StructuredRequest):
     vibes      = [v.lower().strip() for v in req.vibes if v.strip()]
     group_type = req.group_type.lower() or "friends"
 
-    plan = get_travel_plan_json(
-        destination=dest,
-        days=req.days,
-        budget_per_day=req.budget_per_day,
-        group_type=group_type,
-        vibes=vibes,
-        extra_query=req.query,
-    )
+    ck = _cache_key(dest["id"], req.days, req.budget_per_day, group_type, vibes)
+    plan = _cache_get(ck)
+    if plan is None:
+        plan = get_travel_plan_json(
+            destination=dest,
+            days=req.days,
+            budget_per_day=req.budget_per_day,
+            group_type=group_type,
+            vibes=vibes,
+            extra_query=req.query,
+        )
+        _cache_set(ck, plan)
+    else:
+        logger.info(f"Cache hit for {dest['id']}")
 
     cost = estimate_trip_cost(
         dest=dest,
@@ -336,10 +364,102 @@ async def generate_structured(req: StructuredRequest):
     )
 
     return {
-        "destination": {"id": dest["id"], "name": dest["name"], "state": dest["state"]},
-        "plan":         plan,
+        "destination":  {"id": dest["id"], "name": dest["name"], "state": dest["state"]},
+        "plan":          plan,
         "cost_estimate": cost,
+        "cached":        ck in _PLAN_CACHE,
     }
+
+
+class RefineRequest(BaseModel):
+    destination_id: str       = Field(...)
+    days:           int       = Field(default=5, ge=1, le=30)
+    budget_per_day: float     = Field(default=2000, ge=0)
+    group_type:     str       = Field(default="friends")
+    vibes:          list[str] = Field(default=[])
+    existing_plan:  str       = Field(default="", description="Previously generated plan (markdown)")
+    user_message:   str       = Field(..., description="Follow-up request from user")
+
+
+@app.post("/api/refine")
+async def refine_plan(req: RefineRequest):
+    """
+    Refinement chat — streams an updated/focused answer given an existing plan + follow-up.
+    Uses retrieved chunks for context + the previous plan summary.
+    SSE stream of markdown tokens.
+    """
+    dest = next((d for d in DESTINATIONS if d["id"] == req.destination_id), None)
+    if not dest:
+        raise HTTPException(status_code=404, detail="Destination not found")
+
+    vibes      = [v.lower().strip() for v in req.vibes if v.strip()]
+    group_type = req.group_type.lower() or "friends"
+
+    # Retrieve relevant chunks for the follow-up question
+    chunks = retrieve_for_plan(
+        destination_id=req.destination_id,
+        user_query=req.user_message,
+        days=req.days,
+        group_type=group_type,
+        vibes=vibes,
+        n_results=6,
+    )
+
+    groq_key   = os.getenv("GROQ_API_KEY",   "").strip()
+    gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
+
+    # Build refinement prompt
+    context = "\n\n".join(c["text"] for c in chunks[:4])
+    vibe_str   = ", ".join(vibes) or "general"
+    budget_str = f"₹{int(req.budget_per_day):,}"
+
+    existing_snippet = req.existing_plan[:1200] if req.existing_plan else "No previous plan."
+
+    prompt = f"""You are an expert Indian travel planner. The user has a travel plan for {dest['name']}, {dest['state']} and wants a specific follow-up answered.
+
+TRIP DETAILS: {req.days} days | {budget_str}/day | {group_type} | {vibe_str}
+
+EXISTING PLAN SUMMARY (first 1200 chars):
+{existing_snippet}
+
+RELEVANT KNOWLEDGE BASE:
+{context}
+
+USER FOLLOW-UP REQUEST:
+{req.user_message}
+
+Answer the user's specific request directly and concisely. Be practical and specific to {dest['name']}. Use markdown formatting."""
+
+    from rag.generator import _stream_groq, _stream_gemini
+
+    def _event_stream():
+        try:
+            if groq_key:
+                yield from (
+                    f"data: {t.replace(chr(10), chr(92)+'n')}\n\n"
+                    for t in _stream_groq(prompt, groq_key)
+                )
+            elif gemini_key:
+                yield from (
+                    f"data: {t.replace(chr(10), chr(92)+'n')}\n\n"
+                    for t in _stream_gemini(prompt, gemini_key)
+                )
+            else:
+                yield f"data: No LLM key configured. Cannot refine plan.\\n\n\n"
+        except Exception as e:
+            yield f"data: Error: {str(e)}\\n\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        _event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.get("/api/cache/stats")
+def cache_stats():
+    return {"cached_plans": len(_PLAN_CACHE), "max_cache": _MAX_CACHE}
 
 
 @app.get("/api/rag/status")

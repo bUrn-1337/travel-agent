@@ -1,5 +1,8 @@
 /* ===== CONFIG ===== */
-const API_BASE = "http://localhost:8000";
+// Empty string = same origin (works both in Docker via nginx proxy and direct localhost:8000 dev)
+const API_BASE = window.location.port === "3000" || window.location.port === "80" || window.location.port === ""
+  ? ""
+  : "http://localhost:8000";
 
 // GPS state
 let _userLat = null;
@@ -250,7 +253,7 @@ function renderComparisonTable(topPicks, searchPayload) {
     },
     {
       label: "Est. Total (per person)",
-      cells: topPicks.map((d, i) => {
+      cells: topPicks.map((d) => {
         const total = d.cost_estimate?.per_person?.total || 0;
         const fits  = d.cost_estimate?.fits_budget;
         const cls   = total === minTotal ? " best" : (total === maxTotal && minTotal !== maxTotal ? " worst" : "");
@@ -644,8 +647,26 @@ function showModal(dest) {
 
       <!-- STRUCTURED OUTPUT -->
       <div id="rag-output-wrap" style="display:none;" class="modal-section">
-        <h3>Generated Plan</h3>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+          <h3 style="margin:0">Generated Plan</h3>
+          <div style="display:flex;gap:.5rem">
+            <button class="btn-export" onclick="exportPlan('clipboard')" title="Copy to clipboard">📋 Copy</button>
+            <button class="btn-export" onclick="exportPlan('print')" title="Print / Save PDF">🖨 Print</button>
+          </div>
+        </div>
         <div id="rag-output" class="rag-output"></div>
+      </div>
+
+      <!-- REFINEMENT CHAT -->
+      <div id="refine-wrap" style="display:none;" class="modal-section">
+        <h3>Ask a Follow-up</h3>
+        <div class="refine-chat" id="refine-chat"></div>
+        <div class="refine-input-row">
+          <input type="text" id="refine-input" class="refine-input"
+            placeholder="e.g. Suggest budget hotels · Make day 2 vegetarian-friendly · Best time to avoid crowds"
+            onkeydown="if(event.key==='Enter') sendRefinement('${dest.id}')" />
+          <button class="btn-refine" onclick="sendRefinement('${dest.id}')">Ask</button>
+        </div>
       </div>
     </div>
   `;
@@ -704,11 +725,142 @@ async function generatePlanStructured(destId) {
     const data = await resp.json();
     output.innerHTML = renderStructuredPlan(data.plan, data.cost_estimate);
 
+    // Store plan text for refinement + export
+    window._currentPlanDestId = payload.destination_id;
+    window._currentPlanText   = output.innerText;
+    window._currentPlanPayload = payload;
+
+    // Show refinement chat
+    const refineWrap = document.getElementById("refine-wrap");
+    if (refineWrap) refineWrap.style.display = "block";
+
   } catch (err) {
     output.innerHTML = `<p style="color:#dc2626">Error: ${err.message}<br>Make sure the backend is running and RAG is indexed.</p>`;
   } finally {
     btn.disabled    = false;
     btn.textContent = "Regenerate Plan";
+  }
+}
+
+
+/* ===== EXPORT PLAN ===== */
+function exportPlan(mode) {
+  const output = document.getElementById("rag-output");
+  if (!output) return;
+
+  if (mode === "clipboard") {
+    const text = output.innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = event.target;
+      const orig = btn.textContent;
+      btn.textContent = "✓ Copied!";
+      setTimeout(() => { btn.textContent = orig; }, 2000);
+    }).catch(() => {
+      // Fallback for browsers without clipboard API
+      const ta = document.createElement("textarea");
+      ta.value = output.innerText;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    });
+    return;
+  }
+
+  if (mode === "print") {
+    // Get destination name from modal hero
+    const heroName = document.querySelector(".modal-hero h2")?.textContent || "Travel Plan";
+    const printWindow = window.open("", "_blank");
+    printWindow.document.write(`
+      <!DOCTYPE html><html><head>
+        <title>${heroName} — Travel Plan</title>
+        <meta charset="UTF-8">
+        <style>
+          body { font-family: Georgia, serif; max-width: 800px; margin: 2rem auto; color: #111; line-height: 1.7; }
+          h1 { color: #1e3a5f; border-bottom: 2px solid #2563eb; padding-bottom: .5rem; }
+          h2 { color: #2563eb; margin-top: 1.5rem; }
+          h3 { color: #374151; }
+          table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+          th, td { border: 1px solid #e2e8f0; padding: .5rem .75rem; text-align: left; }
+          th { background: #f1f5f9; font-weight: 700; }
+          .day-card { border: 1px solid #e2e8f0; border-radius: 8px; margin: .75rem 0; padding: .75rem 1rem; }
+          .tips-list li { background: #fffbeb; border-left: 3px solid #f59e0b; padding: .4rem .6rem; margin: .3rem 0; list-style: none; }
+          @media print { body { margin: 1rem; } }
+        </style>
+      </head><body>
+        <h1>${heroName}</h1>
+        ${output.innerHTML}
+      </body></html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 500);
+  }
+}
+
+
+/* ===== REFINEMENT CHAT ===== */
+async function sendRefinement(destId) {
+  const input   = document.getElementById("refine-input");
+  const chat    = document.getElementById("refine-chat");
+  const message = input?.value.trim();
+  if (!message || !chat) return;
+
+  input.value = "";
+
+  // Add user bubble
+  chat.innerHTML += `<div class="refine-bubble refine-user">${message}</div>`;
+
+  // Add bot bubble (will stream into it)
+  const botId = `refine-bot-${Date.now()}`;
+  chat.innerHTML += `<div class="refine-bubble refine-bot" id="${botId}">
+    <div class="plan-spinner" style="width:14px;height:14px;border-width:2px"></div>
+  </div>`;
+  chat.scrollTop = chat.scrollHeight;
+
+  const payload = window._currentPlanPayload || {};
+  const requestPayload = {
+    destination_id: destId,
+    days:           payload.days           || parseInt(document.getElementById("days").value)   || 5,
+    budget_per_day: payload.budget_per_day || parseInt(document.getElementById("budget").value) || 2000,
+    group_type:     payload.group_type     || getGroupType(),
+    vibes:          payload.vibes          || [...selectedVibes],
+    existing_plan:  window._currentPlanText || "",
+    user_message:   message,
+  };
+
+  try {
+    const resp = await fetch(`${API_BASE}/api/refine`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify(requestPayload),
+    });
+
+    if (!resp.ok) throw new Error(`Server error ${resp.status}`);
+
+    const botEl  = document.getElementById(botId);
+    botEl.innerHTML = "";
+    const reader  = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "", raw = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const token = line.slice(6);
+        if (token === "[DONE]") break;
+        raw += token.replace(/\\n/g, "\n");
+        botEl.innerHTML = typeof marked !== "undefined" ? marked.parse(raw) : raw;
+        chat.scrollTop = chat.scrollHeight;
+      }
+    }
+  } catch (err) {
+    const botEl = document.getElementById(botId);
+    if (botEl) botEl.innerHTML = `<span style="color:#dc2626">Error: ${err.message}</span>`;
   }
 }
 

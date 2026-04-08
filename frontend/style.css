@@ -894,6 +894,121 @@ details[open] .results-grid { margin-top: 1rem; }
   border-radius: 6px; min-width: 28px;
 }
 
+/* ===== P4: EXPORT BUTTONS ===== */
+.export-row {
+  display: flex;
+  gap: .6rem;
+  margin-top: .75rem;
+}
+.btn-export {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .45rem .9rem;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: .82rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text);
+  transition: all .15s;
+}
+.btn-export:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: #eff6ff;
+}
+
+/* ===== P4: REFINEMENT CHAT ===== */
+#refine-wrap {
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+#refine-wrap h4 {
+  font-size: .9rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: .75rem;
+}
+#refine-chat {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: .5rem;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: .6rem;
+  scroll-behavior: smooth;
+}
+.refine-bubble {
+  max-width: 85%;
+  padding: .55rem .85rem;
+  border-radius: 10px;
+  font-size: .85rem;
+  line-height: 1.55;
+  word-break: break-word;
+}
+.refine-bubble p { margin: 0 0 .4rem; }
+.refine-bubble p:last-child { margin-bottom: 0; }
+.refine-bubble ul, .refine-bubble ol {
+  padding-left: 1.2rem;
+  margin: .3rem 0;
+}
+.refine-user {
+  align-self: flex-end;
+  background: var(--primary);
+  color: #fff;
+  border-bottom-right-radius: 3px;
+}
+.refine-bot {
+  align-self: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-bottom-left-radius: 3px;
+}
+.refine-input-row {
+  display: flex;
+  gap: .5rem;
+  align-items: flex-end;
+}
+.refine-input {
+  flex: 1;
+  padding: .55rem .8rem;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: .85rem;
+  font-family: inherit;
+  height: 40px;
+  transition: border-color .15s;
+}
+.refine-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+.btn-refine {
+  padding: .55rem 1.1rem;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: .85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s;
+}
+.btn-refine:hover { background: var(--primary-dk); }
+.btn-refine:disabled {
+  background: #93c5fd;
+  cursor: not-allowed;
+}
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 640px) {
   .header { padding: 1.25rem; }
@@ -901,4 +1016,27 @@ details[open] .results-grid { margin-top: 1rem; }
   .form-grid { grid-template-columns: 1fr; }
   .results-grid { grid-template-columns: 1fr; }
   .main { margin: 1rem auto; }
+  /* Map */
+  #map { height: 260px !important; }
+  .map-legend { flex-wrap: wrap; gap: .4rem; }
+  /* Comparison table */
+  .comparison-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .comparison-table { min-width: 480px; }
+  /* Filter bar */
+  .filter-bar { gap: .4rem; }
+  .filter-group { flex-wrap: wrap; }
+  /* Day cards */
+  .day-card { padding: .75rem; }
+  .day-time-blocks { grid-template-columns: 1fr; }
+  /* Refinement chat */
+  #refine-chat { max-height: 220px; }
+  .refine-bubble { max-width: 95%; }
+  /* Saved section */
+  .saved-grid { grid-template-columns: 1fr; }
+  /* Modal */
+  .modal-inner { margin: .5rem; padding: 1rem; max-height: 96vh; }
+  /* Structured plan transport/accommodation */
+  .transport-cards, .accom-list { grid-template-columns: 1fr; }
+  /* Cost summary */
+  .cost-breakdown { grid-template-columns: 1fr 1fr; }
 }
