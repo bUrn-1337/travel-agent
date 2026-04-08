@@ -8,6 +8,13 @@ let _userLon = null;
 // Active SSE controllers for top-pick generation (cancel on new search)
 let _genControllers = [];
 
+// P4: Map + filter state
+let _map         = null;
+let _allGeoMarkers = {};   // id → Leaflet marker (all 144)
+let _allGeo      = [];     // full geo payload from /api/destinations/geo
+let _activeFilters = { region: "", budget: "", season: "" };
+let _filteredResults = [];
+
 /* ===== VIBES CONFIG ===== */
 const VIBES = [
   { id: "mountains",  label: "Mountains",   icon: "⛰️" },
@@ -36,6 +43,9 @@ document.addEventListener("DOMContentLoaded", () => {
   renderVibeChips();
   bindRangeSliders();
   bindRadioButtons();
+  initMap();
+  bindFilterChips();
+  renderSavedSection();
 });
 
 function renderVibeChips() {
@@ -104,7 +114,7 @@ function getGPS() {
       btn.classList.add("active");
       status.textContent = `GPS: ${_userLat.toFixed(3)}, ${_userLon.toFixed(3)}`;
     },
-    (err) => {
+    () => {
       btn.textContent = "📍";
       status.textContent = "Location denied — distance scoring disabled.";
       _userLat = null;
@@ -160,6 +170,12 @@ async function doSearch() {
     lastResults        = data.destinations;
     lastRequestedVibes = payload.vibes;
 
+    // P4: update map pin colors + zoom to results
+    updateMapScores(lastResults);
+
+    // P4: reset filters on new search
+    resetFilters();
+
     // Render top picks with auto-generation
     renderTopPicks(data.top_picks, data.query_info, payload);
 
@@ -194,7 +210,7 @@ function renderTopPicks(topPicks, queryInfo, searchPayload) {
   grid.innerHTML = topPicks.map((dest, i) => topPickCard(dest, i + 1)).join("");
 
   // Auto-trigger streaming generation for each top pick in parallel
-  topPicks.forEach((dest, i) => {
+  topPicks.forEach((dest) => {
     const planPayload = {
       destination_id: dest.id,
       days:           searchPayload.days,
@@ -203,7 +219,7 @@ function renderTopPicks(topPicks, queryInfo, searchPayload) {
       vibes:          searchPayload.vibes,
       query:          searchPayload.query || "",
     };
-    streamPlanIntoCard(dest.id, planPayload, i);
+    streamPlanIntoCard(dest.id, planPayload);
   });
 }
 
@@ -351,10 +367,15 @@ function topPickCard(dest, rank) {
       </div>
       <div class="plan-output" id="plan-output-${dest.id}" style="display:none;"></div>
     </div>
+    <div class="pick-save-row">
+      <button class="btn-save pick-save-btn" onclick='toggleSave(${JSON.stringify(dest)})' id="save-btn-${dest.id}">
+        ${isSaved(dest.id) ? "★ Saved" : "☆ Save"}
+      </button>
+    </div>
   </div>`;
 }
 
-async function streamPlanIntoCard(destId, payload, index) {
+async function streamPlanIntoCard(destId, payload) {
   const loadingEl = document.getElementById(`plan-loading-${destId}`);
   const outputEl  = document.getElementById(`plan-output-${destId}`);
   const section   = document.querySelector(".top-picks-sub");
@@ -378,7 +399,6 @@ async function streamPlanIntoCard(destId, payload, index) {
     outputEl.style.display  = "block";
 
     // Show source badge
-    const googleActive = true; // backend will have tried Google Search
     outputEl.innerHTML = `<span class="plan-source-badge plan-source-live">
       🌐 Knowledge Base + Live Web
     </span>`;
@@ -410,8 +430,6 @@ async function streamPlanIntoCard(destId, payload, index) {
       }
     }
 
-    // Update sub-heading once all complete
-    const allDone = _genControllers.every(c => c.signal.aborted || true);
     if (section) section.textContent = "Travel plans ready.";
 
   } catch (err) {
@@ -436,11 +454,11 @@ function sortResults() {
   else if (sortBy === "popularity") sorted.sort((a, b) => b.popularity - a.popularity);
   else if (sortBy === "vibe_match") sorted.sort((a, b) => b.score_breakdown.vibe_match - a.score_breakdown.vibe_match);
 
-  renderResults(sorted, null, /* rerender */);
+  renderResults(sorted, null);
 }
 
 /* ===== RENDER ===== */
-function renderResults(destinations, queryInfo, rerender = false) {
+function renderResults(destinations, queryInfo) {
   const section = document.getElementById("results-section");
   const grid    = document.getElementById("results-grid");
   const title   = document.getElementById("results-title");
@@ -511,6 +529,9 @@ function destinationCard(dest, rank) {
       <span class="season-badge ${inSeason ? "season-good" : "season-bad"}">
         ${inSeason ? "✓ In season" : "⚠ Off season"}
       </span>
+      <button class="btn-save card-save-btn" onclick='event.stopPropagation();toggleSave(${JSON.stringify(dest).replace(/"/g,"&quot;")})' id="save-btn-${dest.id}">
+        ${isSaved(dest.id) ? "★" : "☆"}
+      </button>
     </div>
   </div>`;
 }
@@ -611,9 +632,14 @@ function showModal(dest) {
           Generates a structured itinerary, food guide, transport breakdown &amp; accommodation
           using retrieved knowledge base chunks + LLM (Groq/Gemini if configured).
         </p>
-        <button class="btn-generate" id="btn-generate" onclick="generatePlanStructured('${dest.id}')">
-          Generate Structured Plan
-        </button>
+        <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+          <button class="btn-generate" id="btn-generate" onclick="generatePlanStructured('${dest.id}')">
+            Generate Structured Plan
+          </button>
+          <button class="btn-save" id="btn-save-modal" onclick="toggleSave(${JSON.stringify(dest).replace(/"/g, '&quot;')})">
+            ${isSaved(dest.id) ? "★ Saved" : "☆ Save"}
+          </button>
+        </div>
       </div>
 
       <!-- STRUCTURED OUTPUT -->
@@ -804,6 +830,302 @@ function renderStructuredPlan(plan, cost) {
   html += `</div>`;
   return html;
 }
+
+/* =====================================================================
+   P4 — A: INTERACTIVE MAP
+   ===================================================================== */
+
+const VIBE_COLORS = {
+  mountains: "#3b82f6", beach: "#06b6d4", heritage: "#8b5cf6",
+  adventure: "#f97316", wildlife: "#16a34a", spiritual: "#ec4899",
+  offbeat: "#64748b", desert: "#d97706", backwaters: "#0891b2",
+  nature: "#22c55e", honeymoon: "#e879f9", trekking: "#84cc16",
+  default: "#94a3b8",
+};
+
+function vibeColor(vibe) {
+  return VIBE_COLORS[vibe] || VIBE_COLORS.default;
+}
+
+function makeCircleIcon(color, r = 8, border = "#fff") {
+  return L.divIcon({
+    className: "",
+    html: `<svg width="${r*2+4}" height="${r*2+4}" viewBox="0 0 ${r*2+4} ${r*2+4}">
+      <circle cx="${r+2}" cy="${r+2}" r="${r}" fill="${color}" stroke="${border}" stroke-width="2"/>
+    </svg>`,
+    iconSize: [r*2+4, r*2+4],
+    iconAnchor: [r+2, r+2],
+    popupAnchor: [0, -(r+4)],
+  });
+}
+
+async function initMap() {
+  _map = L.map("map", { zoomControl: true }).setView([22.5, 80], 4.5);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap contributors",
+    maxZoom: 18,
+  }).addTo(_map);
+
+  try {
+    const resp = await fetch(`${API_BASE}/api/destinations/geo`);
+    _allGeo = await resp.json();
+  } catch { return; }
+
+  _allGeo.forEach(dest => {
+    const color  = vibeColor(dest.primary_vibe);
+    const radius = 6 + (dest.popularity / 10) * 4;   // 6–10px based on popularity
+    const marker = L.marker([dest.lat, dest.lon], { icon: makeCircleIcon(color, radius) })
+      .addTo(_map)
+      .bindPopup(mapPopupHtml(dest, null));
+
+    marker.on("click", () => {
+      marker.setPopupContent(mapPopupHtml(dest, null));
+    });
+
+    _allGeoMarkers[dest.id] = marker;
+  });
+}
+
+function mapPopupHtml(geo, score) {
+  const pct    = score != null ? Math.round(score * 100) : null;
+  const color  = score == null ? "#94a3b8" : score > 0.7 ? "#16a34a" : score > 0.5 ? "#d97706" : "#ea580c";
+  const scoreBar = pct != null
+    ? `<div style="margin:.4rem 0 .3rem">
+         <div style="height:5px;background:#e2e8f0;border-radius:4px;overflow:hidden">
+           <div style="height:100%;width:${pct}%;background:${color};border-radius:4px"></div>
+         </div>
+         <span style="font-size:.7rem;color:${color};font-weight:700">${pct}% match</span>
+       </div>`
+    : "";
+
+  const savedBtn = `<button onclick="toggleSaveById('${geo.id}')" style="
+    background:none;border:1px solid #e2e8f0;border-radius:6px;padding:.2rem .5rem;
+    cursor:pointer;font-size:.72rem;color:#64748b;margin-top:.3rem"
+    id="map-save-${geo.id}">${isSaved(geo.id) ? "★ Saved" : "☆ Save"}</button>`;
+
+  return `
+    <div style="min-width:170px;font-family:Inter,sans-serif">
+      <div style="font-weight:800;font-size:.95rem;color:#0f172a">${geo.name}</div>
+      <div style="font-size:.75rem;color:#64748b;margin-bottom:.3rem">${geo.state}</div>
+      ${scoreBar}
+      <div style="display:flex;gap:.35rem;flex-wrap:wrap;margin:.3rem 0">
+        ${(geo.vibes||[]).slice(0,3).map(v=>`<span style="font-size:.65rem;padding:.1rem .35rem;border-radius:4px;background:#eff6ff;color:#2563eb;font-weight:600">${v}</span>`).join("")}
+      </div>
+      <div style="display:flex;gap:.4rem;margin-top:.4rem">
+        <button onclick="openModalById('${geo.id}')" style="
+          background:#2563eb;color:#fff;border:none;border-radius:6px;
+          padding:.3rem .7rem;cursor:pointer;font-size:.75rem;font-weight:700">
+          View Details
+        </button>
+        ${savedBtn}
+      </div>
+    </div>`;
+}
+
+function updateMapScores(rankedDests) {
+  // Reset all markers to default vibe color first
+  _allGeo.forEach(geo => {
+    const color  = vibeColor(geo.primary_vibe);
+    const radius = 6 + (geo.popularity / 10) * 4;
+    _allGeoMarkers[geo.id]?.setIcon(makeCircleIcon(color, radius));
+  });
+
+  const scoreMap = {};
+  rankedDests.forEach((d, i) => { scoreMap[d.id] = { score: d.score, rank: i + 1 }; });
+
+  const bounds = [];
+  rankedDests.slice(0, 20).forEach((dest, i) => {
+    const m = _allGeoMarkers[dest.id];
+    if (!m) return;
+
+    let color, r;
+    if (i < 3)           { color = "#2563eb"; r = 14; }
+    else if (dest.score > 0.7) { color = "#16a34a"; r = 11; }
+    else if (dest.score > 0.5) { color = "#d97706"; r = 9; }
+    else                       { color = "#ea580c"; r = 8; }
+
+    m.setIcon(makeCircleIcon(color, r, i < 3 ? "#fff" : "#fff"));
+    m.setPopupContent(mapPopupHtml(dest, dest.score));
+    if (dest.lat) bounds.push([dest.lat, dest.lon]);
+  });
+
+  if (bounds.length > 1) {
+    _map.fitBounds(bounds, { padding: [60, 60], maxZoom: 9 });
+  } else if (bounds.length === 1) {
+    _map.setView(bounds[0], 8);
+  }
+}
+
+async function openModalById(destId) {
+  try {
+    const resp = await fetch(`${API_BASE}/api/destinations/${destId}`);
+    const dest = await resp.json();
+    // merge score if available
+    const ranked = lastResults.find(d => d.id === destId);
+    if (ranked) Object.assign(dest, { score: ranked.score, score_breakdown: ranked.score_breakdown });
+    showModal(dest);
+  } catch (e) {
+    console.error("openModalById failed", e);
+  }
+}
+
+
+/* =====================================================================
+   P4 — B: SMART FILTERS
+   ===================================================================== */
+
+function bindFilterChips() {
+  ["filter-region", "filter-budget", "filter-season"].forEach(groupId => {
+    const group = document.getElementById(groupId);
+    if (!group) return;
+    const key = groupId.replace("filter-", "");
+    group.querySelectorAll(".filter-chip").forEach(btn => {
+      btn.addEventListener("click", () => {
+        group.querySelectorAll(".filter-chip").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        _activeFilters[key] = btn.dataset.val;
+        applyFilters();
+      });
+    });
+  });
+}
+
+function applyFilters() {
+  let results = [...lastResults];
+
+  if (_activeFilters.region) {
+    results = results.filter(d => d.region === _activeFilters.region);
+  }
+
+  if (_activeFilters.budget) {
+    results = results.filter(d => d.budget_range === _activeFilters.budget);
+  }
+
+  if (_activeFilters.season === "in-season") {
+    const currentMonth = new Date().getMonth() + 1;
+    results = results.filter(d => (d.best_months || []).includes(currentMonth));
+  }
+
+  _filteredResults = results;
+
+  const statusEl = document.getElementById("filter-status");
+  const active = Object.values(_activeFilters).filter(Boolean).length;
+  if (statusEl) {
+    statusEl.textContent = active
+      ? `${results.length} destinations match your filters`
+      : "";
+  }
+
+  renderResults(results, null);
+}
+
+function resetFilters() {
+  _activeFilters = { region: "", budget: "", season: "" };
+  document.querySelectorAll(".filter-chip").forEach(b => {
+    b.classList.toggle("active", b.dataset.val === "");
+  });
+  applyFilters();
+}
+
+
+/* =====================================================================
+   P4 — B: SAVED TRIPS
+   ===================================================================== */
+
+const SAVED_KEY = "travelmind_saved";
+
+function getSaved() {
+  try { return JSON.parse(localStorage.getItem(SAVED_KEY) || "[]"); }
+  catch { return []; }
+}
+
+function isSaved(destId) {
+  return getSaved().some(s => s.id === destId);
+}
+
+function toggleSave(dest) {
+  let saved = getSaved();
+  const nowSaved = !isSaved(dest.id);
+  if (!nowSaved) {
+    saved = saved.filter(s => s.id !== dest.id);
+  } else {
+    saved.push({
+      id:          dest.id,
+      name:        dest.name,
+      state:       dest.state,
+      region:      dest.region,
+      score:       dest.score || 0,
+      vibes:       dest.vibes || [],
+      avg_cost_mid: dest.avg_cost_mid || 0,
+      savedAt:     new Date().toISOString(),
+    });
+  }
+  localStorage.setItem(SAVED_KEY, JSON.stringify(saved));
+  renderSavedSection();
+
+  // Update every button that references this dest id
+  document.querySelectorAll(`[id="save-btn-${dest.id}"]`).forEach(btn => {
+    const isCard = btn.classList.contains("card-save-btn");
+    btn.textContent = nowSaved ? (isCard ? "★" : "★ Saved") : (isCard ? "☆" : "☆ Save");
+  });
+  const modalBtn = document.getElementById("btn-save-modal");
+  if (modalBtn) modalBtn.textContent = nowSaved ? "★ Saved" : "☆ Save";
+  const mapBtn = document.getElementById(`map-save-${dest.id}`);
+  if (mapBtn) mapBtn.textContent = nowSaved ? "★ Saved" : "☆ Save";
+}
+
+function toggleSaveById(destId) {
+  // For map popup clicks — find dest in lastResults or allGeo
+  const dest = lastResults.find(d => d.id === destId)
+    || _allGeo.find(d => d.id === destId)
+    || { id: destId, name: destId };
+  toggleSave(dest);
+}
+
+function clearAllSaved() {
+  localStorage.removeItem(SAVED_KEY);
+  renderSavedSection();
+}
+
+function renderSavedSection() {
+  const saved   = getSaved();
+  const section = document.getElementById("saved-section");
+  const grid    = document.getElementById("saved-grid");
+  if (!section || !grid) return;
+
+  if (!saved.length) { section.style.display = "none"; return; }
+
+  section.style.display = "block";
+  grid.innerHTML = saved.map(s => {
+    const pct = Math.round((s.score || 0) * 100);
+    return `
+      <div class="saved-card">
+        <div class="saved-card-top">
+          <div>
+            <div class="saved-name">${s.name}</div>
+            <div class="saved-state">${s.state} · ${s.region}</div>
+          </div>
+          <button class="saved-remove" onclick="removeSaved('${s.id}')" title="Remove">✕</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:.3rem;margin:.5rem 0">
+          ${(s.vibes||[]).slice(0,4).map(v=>`<span class="vibe-tag">${v}</span>`).join("")}
+        </div>
+        <div class="saved-meta">
+          ${pct ? `<span style="color:var(--primary);font-weight:700">${pct}% match</span>` : ""}
+          <span>₹${(s.avg_cost_mid||0).toLocaleString("en-IN")}/day</span>
+        </div>
+        <button class="btn-view-saved" onclick="openModalById('${s.id}')">View Details</button>
+      </div>`;
+  }).join("");
+}
+
+function removeSaved(destId) {
+  const saved = getSaved().filter(s => s.id !== destId);
+  localStorage.setItem(SAVED_KEY, JSON.stringify(saved));
+  renderSavedSection();
+}
+
 
 /* ===== HELPERS ===== */
 function showLoader()  { document.getElementById("loader").style.display = "flex"; }

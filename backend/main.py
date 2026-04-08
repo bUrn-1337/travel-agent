@@ -139,6 +139,25 @@ def list_destinations():
     ]
 
 
+@app.get("/api/destinations/geo")
+def destinations_geo():
+    """Minimal lat/lon payload for map initialisation — all 144 destinations."""
+    return [
+        {
+            "id":           d["id"],
+            "name":         d["name"],
+            "state":        d["state"],
+            "region":       d["region"],
+            "lat":          d["lat"],
+            "lon":          d["lon"],
+            "primary_vibe": d.get("primary_vibe", ""),
+            "vibes":        d.get("vibes", []),
+            "popularity":   d.get("popularity", 5),
+        }
+        for d in DESTINATIONS
+    ]
+
+
 @app.get("/api/destinations/{dest_id}")
 def get_destination(dest_id: str):
     """Return full details for a single destination."""

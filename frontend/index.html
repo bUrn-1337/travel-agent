@@ -7,6 +7,9 @@
   <link rel="stylesheet" href="style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <!-- Leaflet.js — interactive map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
 
@@ -112,6 +115,20 @@
     </button>
   </section>
 
+  <!-- ===== MAP ===== -->
+  <section class="card map-section" id="map-section">
+    <div class="map-header">
+      <h2 class="section-title" style="margin-bottom:0">Destination Map</h2>
+      <div class="map-legend" id="map-legend">
+        <span class="legend-item"><span class="legend-dot" style="background:#2563eb"></span>Top 3</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#16a34a"></span>High match</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#d97706"></span>Good match</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#94a3b8"></span>All destinations</span>
+      </div>
+    </div>
+    <div id="map"></div>
+  </section>
+
   <!-- ===== TOP PICKS (auto-generated) ===== -->
   <section id="top-picks-section" style="display:none;">
     <div class="top-picks-header">
@@ -124,6 +141,15 @@
     <!-- P3: comparison table injected here -->
     <div id="comparison-table-wrap"></div>
     <div class="top-picks-grid" id="top-picks-grid"></div>
+  </section>
+
+  <!-- ===== SAVED TRIPS ===== -->
+  <section class="card saved-section" id="saved-section" style="display:none;">
+    <div class="saved-header">
+      <h2 class="section-title" style="margin-bottom:0">Saved Destinations</h2>
+      <button class="btn-clear-saved" onclick="clearAllSaved()">Clear all</button>
+    </div>
+    <div class="saved-grid" id="saved-grid"></div>
   </section>
 
   <!-- ===== ALL RESULTS (collapsible) ===== -->
@@ -141,6 +167,40 @@
           </select>
         </div>
       </summary>
+
+      <!-- P4: Filter bar -->
+      <div class="filter-bar" id="filter-bar">
+        <div class="filter-group">
+          <span class="filter-label">Region</span>
+          <div class="filter-chips" id="filter-region">
+            <button class="filter-chip active" data-val="">All</button>
+            <button class="filter-chip" data-val="North India">North</button>
+            <button class="filter-chip" data-val="South India">South</button>
+            <button class="filter-chip" data-val="West India">West</button>
+            <button class="filter-chip" data-val="Central India">Central</button>
+            <button class="filter-chip" data-val="East India">East</button>
+            <button class="filter-chip" data-val="Northeast India">Northeast</button>
+          </div>
+        </div>
+        <div class="filter-group">
+          <span class="filter-label">Budget</span>
+          <div class="filter-chips" id="filter-budget">
+            <button class="filter-chip active" data-val="">All</button>
+            <button class="filter-chip" data-val="budget">Budget (&lt;₹1.5k)</button>
+            <button class="filter-chip" data-val="medium">Mid (₹1.5k–4k)</button>
+            <button class="filter-chip" data-val="luxury">Luxury (&gt;₹4k)</button>
+          </div>
+        </div>
+        <div class="filter-group">
+          <span class="filter-label">Season</span>
+          <div class="filter-chips" id="filter-season">
+            <button class="filter-chip active" data-val="">All</button>
+            <button class="filter-chip" data-val="in-season">In season only</button>
+          </div>
+        </div>
+        <div class="filter-status" id="filter-status"></div>
+      </div>
+
       <div class="results-grid" id="results-grid"></div>
     </details>
   </section>
