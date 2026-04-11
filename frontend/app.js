@@ -374,9 +374,25 @@ function topPickCard(dest, rank) {
     `<span class="vibe-tag ${reqSet.has(v) ? "matched" : ""}">${v}</span>`
   ).join("");
 
+  const photos = dest.photo_urls || (dest.photo_url ? [dest.photo_url] : []);
+  const photoStyle = photos.length
+    ? `style="background-image:url('${photos[0]}');background-size:cover;background-position:center;"`
+    : "";
+  const photoNav = photos.length > 1 ? `
+    <div class="photo-nav">
+      <button class="photo-nav-btn" onclick="event.stopPropagation();cyclePhoto('${dest.id}',-1)">&#8592;</button>
+      <span class="photo-nav-dots" id="photo-dots-${dest.id}">${photos.map((_,i)=>`<span class="photo-dot${i===0?' active':''}"></span>`).join("")}</span>
+      <button class="photo-nav-btn" onclick="event.stopPropagation();cyclePhoto('${dest.id}',1)">&#8594;</button>
+    </div>` : "";
+
+  // Store photos on window for cycling
+  window._destPhotos = window._destPhotos || {};
+  window._destPhotos[dest.id] = { urls: photos, idx: 0 };
+
   return `
   <div class="top-pick-card" id="pick-card-${dest.id}">
-    <div class="top-pick-hero" data-vibe="${dest.primary_vibe || ''}">
+    <div class="top-pick-hero ${photos.length ? 'has-photo' : ''}" data-vibe="${dest.primary_vibe || ''}" id="pick-hero-${dest.id}" ${photoStyle}>
+      <div class="pick-hero-overlay"></div>
       <div class="pick-rank">#${rank} Best Match</div>
       <div class="pick-name">${dest.name}</div>
       <div class="pick-state">${dest.state} · ${dest.region}</div>
@@ -385,6 +401,7 @@ function topPickCard(dest, rank) {
         <span class="pick-meta-item">₹${(dest.avg_cost_mid||0).toLocaleString("en-IN")}/day</span>
         <span class="pick-meta-item">${inSeason ? "✓ In season" : "⚠ Off season"}</span>
       </div>
+      ${photoNav}
     </div>
     <div class="pick-body">
       <div class="pick-score-row">
@@ -407,9 +424,93 @@ function topPickCard(dest, rank) {
       <button class="btn-save pick-save-btn" onclick='toggleSave(${JSON.stringify(dest)})' id="save-btn-${dest.id}">
         ${isSaved(dest.id) ? "★ Saved" : "☆ Save"}
       </button>
+      ${photos.length ? `<button class="btn-photos" onclick="openGallery('${dest.id}','${dest.name}')">📷 Photos</button>` : ""}
       ${_searchMode === "discover" ? `<button class="btn-been-there" onclick="crossOffTopPick('${dest.id}')" title="Already visited — show me the next option">✓ Been there</button>` : ""}
     </div>
   </div>`;
+}
+
+/* ===== PHOTO GALLERY ===== */
+let _galleryPhotos = [];
+let _lightboxIdx   = 0;
+
+async function openGallery(destId, destName) {
+  const overlay = document.getElementById("gallery-overlay");
+  const grid    = document.getElementById("gallery-grid");
+  const title   = document.getElementById("gallery-title");
+
+  title.textContent = destName;
+  grid.innerHTML    = `<div class="gallery-loading">Loading photos…</div>`;
+  overlay.classList.add("active");
+  document.body.style.overflow = "hidden";
+
+  // Use cached photos if available, otherwise fetch with count=15
+  const cached = window._destPhotos?.[destId];
+  let photos = cached?.urls || [];
+
+  if (!photos.length || photos.length < 6) {
+    try {
+      const resp = await fetch(`${API_BASE}/api/photos/${destId}?count=15`);
+      const data = await resp.json();
+      photos = data.photo_urls || [];
+      if (window._destPhotos) window._destPhotos[destId] = { urls: photos, idx: 0 };
+    } catch { photos = []; }
+  }
+
+  _galleryPhotos = photos;
+
+  if (!photos.length) {
+    grid.innerHTML = `<p style="color:var(--muted);padding:2rem;text-align:center">No photos found.</p>`;
+    return;
+  }
+
+  grid.innerHTML = photos.map((url, i) => `
+    <div class="gallery-thumb" onclick="openLightbox(${i})">
+      <img src="${url}" alt="Photo ${i+1}" loading="lazy" />
+    </div>
+  `).join("");
+}
+
+function closeGallery() {
+  document.getElementById("gallery-overlay").classList.remove("active");
+  document.body.style.overflow = "";
+  closeLightbox();
+}
+
+function openLightbox(idx) {
+  _lightboxIdx = idx;
+  const lb  = document.getElementById("gallery-lightbox");
+  const img = document.getElementById("lightbox-img");
+  img.src   = _galleryPhotos[idx];
+  lb.style.display = "flex";
+}
+
+function closeLightbox() {
+  document.getElementById("gallery-lightbox").style.display = "none";
+}
+
+function lightboxNav(dir) {
+  _lightboxIdx = (_lightboxIdx + dir + _galleryPhotos.length) % _galleryPhotos.length;
+  document.getElementById("lightbox-img").src = _galleryPhotos[_lightboxIdx];
+}
+
+function cyclePhoto(destId, dir) {
+  const state = window._destPhotos?.[destId];
+  if (!state || state.urls.length < 2) return;
+
+  state.idx = (state.idx + dir + state.urls.length) % state.urls.length;
+
+  const hero = document.getElementById(`pick-hero-${destId}`);
+  if (hero) {
+    hero.style.backgroundImage = `url('${state.urls[state.idx]}')`;
+  }
+
+  const dots = document.getElementById(`photo-dots-${destId}`);
+  if (dots) {
+    dots.querySelectorAll(".photo-dot").forEach((d, i) =>
+      d.classList.toggle("active", i === state.idx)
+    );
+  }
 }
 
 async function streamPlanIntoCard(destId, payload) {
@@ -557,9 +658,14 @@ function destinationCard(dest, rank) {
       </div>`;
   }).join("");
 
+  const cardPhotoStyle = dest.photo_url
+    ? `style="background-image:url('${dest.photo_url}');background-size:cover;background-position:center;"`
+    : "";
+
   return `
   <div class="result-card" onclick="showModal(${JSON.stringify(dest).replace(/"/g, '&quot;')})">
-    <div class="card-header" data-vibe="${dest.primary_vibe || ''}">
+    <div class="card-header ${dest.photo_url ? 'has-photo' : ''}" data-vibe="${dest.primary_vibe || ''}" ${cardPhotoStyle}>
+      <div class="card-header-overlay"></div>
       <div class="card-rank">#${rank}</div>
       <div class="card-name">${dest.name}</div>
       <div class="card-state">${dest.state} · ${dest.region}</div>

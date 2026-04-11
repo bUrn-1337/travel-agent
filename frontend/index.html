@@ -275,6 +275,22 @@
 
 </main>
 
+<!-- ===== PHOTO GALLERY MODAL ===== -->
+<div class="modal-overlay" id="gallery-overlay" onclick="closeGallery()">
+  <div class="gallery-modal" onclick="event.stopPropagation()">
+    <div class="gallery-header">
+      <h3 class="gallery-title" id="gallery-title"></h3>
+      <button class="modal-close" onclick="closeGallery()">✕</button>
+    </div>
+    <div class="gallery-grid" id="gallery-grid"></div>
+    <div class="gallery-lightbox" id="gallery-lightbox" style="display:none;" onclick="closeLightbox()">
+      <button class="lightbox-nav left" onclick="event.stopPropagation();lightboxNav(-1)">&#8592;</button>
+      <img class="lightbox-img" id="lightbox-img" src="" alt="" onclick="event.stopPropagation()" />
+      <button class="lightbox-nav right" onclick="event.stopPropagation();lightboxNav(1)">&#8594;</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== DETAIL MODAL ===== -->
 <div class="modal-overlay" id="modal-overlay" onclick="closeModal()">
   <div class="modal-card" onclick="event.stopPropagation()">

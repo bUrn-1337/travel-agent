@@ -25,6 +25,7 @@ from rag.pipeline import stream_travel_plan, get_travel_plan_json
 from rag.retriever import retrieve_for_plan
 from ranking.scorer import rank_destinations
 from ranking.cost_estimator import estimate_trip_cost
+from rag.photo_fetcher import get_photo_url, get_photos
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -241,6 +242,7 @@ def search(req: SearchRequest):
     gps_active = req.user_lat is not None and req.user_lon is not None
 
     # P3: attach deterministic cost estimates to top 3 picks
+    # P5: attach photo URLs
     top3 = ranked[:3]
     for dest in top3:
         dest["cost_estimate"] = estimate_trip_cost(
@@ -251,6 +253,9 @@ def search(req: SearchRequest):
             user_lat=req.user_lat,
             user_lon=req.user_lon,
         )
+        photos = get_photos(dest["id"], dest["name"], dest.get("state", ""))
+        dest["photo_url"]  = photos[0] if photos else None
+        dest["photo_urls"] = photos
 
     return SearchResponse(
         destinations=ranked,
@@ -276,6 +281,17 @@ class GenerateRequest(BaseModel):
     group_type:     str   = Field(default="friends")
     vibes:          list[str] = Field(default=[])
     query:          str   = Field(default="", description="Extra user question / context")
+
+
+@app.get("/api/photos/{dest_id}")
+def get_photo(dest_id: str, count: int = 6):
+    """Return photo URLs for a destination (P5). count=1..15. Cached per dest_id."""
+    dest = next((d for d in DESTINATIONS if d["id"] == dest_id), None)
+    if not dest:
+        raise HTTPException(status_code=404, detail="Destination not found")
+    count = max(1, min(count, 15))
+    urls = get_photos(dest_id, dest["name"], dest.get("state", ""), count=count)
+    return {"photo_url": urls[0] if urls else None, "photo_urls": urls, "name": dest["name"]}
 
 
 @app.post("/api/generate")
