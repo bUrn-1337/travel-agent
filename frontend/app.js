@@ -19,9 +19,12 @@ let _activeFilters = { region: "", budget: "", season: "" };
 let _filteredResults = [];
 
 // Cross-off / visited state
-let _visitedDestIds   = new Set(JSON.parse(localStorage.getItem("visitedDests") || "[]"));
-let _currentTopPickIds = [];   // IDs currently rendered as top picks (in order)
-let _lastSearchPayload = null; // stored so replacement cards can re-use it
+let _visitedDestIds    = new Set(JSON.parse(localStorage.getItem("visitedDests") || "[]"));
+let _currentTopPickIds = [];
+let _totalTopPicksAdded = 0;   // monotonically increasing, used for rank label
+let _lastSearchPayload = null;
+const _planPayloads    = {};   // destId → planPayload, for retry
+let _searchMode        = "discover";  // "discover" | "lookup" — controls been-there visibility
 
 /* ===== VIBES CONFIG ===== */
 const VIBES = [
@@ -112,18 +115,12 @@ function getGroupType() {
 }
 
 /* ===== GPS ===== */
-function getGPS() {
-  const btn    = document.getElementById("btn-gps");
-  const status = document.getElementById("gps-status");
-
+function _requestGPS(btn, status) {
   if (!navigator.geolocation) {
-    status.textContent = "Geolocation not supported by your browser.";
+    status.textContent = "Geolocation not supported.";
     return;
   }
-
   btn.textContent = "⏳";
-  status.textContent = "Getting location...";
-
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       _userLat = pos.coords.latitude;
@@ -141,8 +138,23 @@ function getGPS() {
   );
 }
 
+function getLookupGPS() {
+  _requestGPS(
+    document.getElementById("btn-gps-lookup"),
+    document.getElementById("gps-status-lookup")
+  );
+}
+
+function getGPS() {
+  _requestGPS(
+    document.getElementById("btn-gps"),
+    document.getElementById("gps-status")
+  );
+}
+
 /* ===== SEARCH ===== */
 async function doSearch() {
+  _searchMode = "discover";
   const city   = document.getElementById("city").value.trim();
   const days   = parseInt(document.getElementById("days").value);
   const budget = parseInt(document.getElementById("budget").value);
@@ -216,8 +228,9 @@ function renderTopPicks(topPicks, queryInfo, searchPayload) {
   if (!topPicks || topPicks.length === 0) return;
 
   // Store for cross-off replacements
-  _lastSearchPayload  = searchPayload;
-  _currentTopPickIds  = topPicks.map(d => d.id);
+  _lastSearchPayload   = searchPayload;
+  _currentTopPickIds   = topPicks.map(d => d.id);
+  _totalTopPicksAdded  = topPicks.length;
 
   section.style.display = "block";
   sub.textContent = `Generating personalised travel plans for your top ${topPicks.length} matches...`;
@@ -230,15 +243,16 @@ function renderTopPicks(topPicks, queryInfo, searchPayload) {
 
   grid.innerHTML = topPicks.map((dest, i) => topPickCard(dest, i + 1)).join("");
 
-  topPicks.forEach((dest) => {
-    streamPlanIntoCard(dest.id, {
+  // Stagger requests by 4s to avoid hitting Groq's rate limit
+  topPicks.forEach((dest, i) => {
+    setTimeout(() => streamPlanIntoCard(dest.id, {
       destination_id: dest.id,
       days:           searchPayload.days,
       budget_per_day: searchPayload.budget_per_day,
       group_type:     searchPayload.group_type,
       vibes:          searchPayload.vibes,
       query:          searchPayload.query || "",
-    });
+    }), i * 4000);
   });
 }
 
@@ -393,14 +407,13 @@ function topPickCard(dest, rank) {
       <button class="btn-save pick-save-btn" onclick='toggleSave(${JSON.stringify(dest)})' id="save-btn-${dest.id}">
         ${isSaved(dest.id) ? "★ Saved" : "☆ Save"}
       </button>
-      <button class="btn-been-there" onclick="crossOffTopPick('${dest.id}')" title="Already visited — show me the next option">
-        ✓ Been there
-      </button>
+      ${_searchMode === "discover" ? `<button class="btn-been-there" onclick="crossOffTopPick('${dest.id}')" title="Already visited — show me the next option">✓ Been there</button>` : ""}
     </div>
   </div>`;
 }
 
 async function streamPlanIntoCard(destId, payload) {
+  _planPayloads[destId] = payload; // store for retry
   const loadingEl = document.getElementById(`plan-loading-${destId}`);
   const outputEl  = document.getElementById(`plan-output-${destId}`);
   const section   = document.querySelector(".top-picks-sub");
@@ -462,11 +475,23 @@ async function streamPlanIntoCard(destId, payload) {
     if (loadingEl) loadingEl.style.display = "none";
     if (outputEl) {
       outputEl.style.display = "block";
-      outputEl.innerHTML = `<p style="color:#dc2626;font-size:.8rem">
-        Could not generate plan: ${err.message}
-      </p>`;
+      outputEl.innerHTML = `
+        <p style="color:#f87171;font-size:.8rem;margin-bottom:.5rem">
+          Plan generation failed — the AI service may be busy.
+        </p>
+        <button class="btn-retry-plan" onclick="retryPlan('${destId}')">↺ Retry</button>`;
     }
   }
+}
+
+function retryPlan(destId) {
+  const payload = _planPayloads[destId];
+  if (!payload) return;
+  const loadingEl = document.getElementById(`plan-loading-${destId}`);
+  const outputEl  = document.getElementById(`plan-output-${destId}`);
+  if (loadingEl) loadingEl.style.display = "flex";
+  if (outputEl)  { outputEl.style.display = "none"; outputEl.innerHTML = ""; }
+  streamPlanIntoCard(destId, payload);
 }
 
 /* ===== SORT ===== */
@@ -798,7 +823,8 @@ function _addNextTopPick() {
   }
 
   _currentTopPickIds.push(next.id);
-  const rank = _currentTopPickIds.length;
+  _totalTopPicksAdded++;
+  const rank = _totalTopPicksAdded;
 
   const grid = document.getElementById("top-picks-grid");
   const wrap = document.createElement("div");
@@ -826,6 +852,14 @@ function _addNextTopPick() {
   }
 }
 
+/* ===== SEARCH TABS ===== */
+function switchSearchTab(tabId, btn) {
+  document.querySelectorAll(".search-tab").forEach(t => t.classList.remove("active"));
+  document.querySelectorAll(".search-tab-pane").forEach(p => p.classList.remove("active"));
+  btn.classList.add("active");
+  document.getElementById(`tab-${tabId}`).classList.add("active");
+}
+
 /* ===== DESTINATION QUICK LOOKUP ===== */
 async function loadDestAutocomplete() {
   if (_allGeo.length) { _populateDatalist(); return; }
@@ -845,7 +879,8 @@ function _populateDatalist() {
 }
 
 function lookupDestination() {
-  const input = document.getElementById("dest-quick-input");
+  _searchMode = "lookup";
+  const input = document.getElementById("dest-lookup-input");
   const val   = (input?.value || "").trim();
   if (!val) return;
 
@@ -855,11 +890,42 @@ function lookupDestination() {
     `${d.name}, ${d.state}`.toLowerCase() === val.toLowerCase()
   );
 
-  // Pre-fill the query field and run a search
+  // Sync lookup tab values into the discover form before searching
+  const lookupCity   = document.getElementById("lookup-city");
+  if (lookupCity?.value.trim()) {
+    const cityEl = document.getElementById("city");
+    if (cityEl) cityEl.value = lookupCity.value.trim();
+  }
+
+  const lookupDays   = document.getElementById("lookup-days");
+  const lookupBudget = document.getElementById("lookup-budget");
+  const lookupGroup  = document.querySelector("input[name='lookup-group']:checked");
+
+  if (lookupDays) {
+    const daysEl = document.getElementById("days");
+    if (daysEl) { daysEl.value = lookupDays.value; document.getElementById("days-val").textContent = lookupDays.value; }
+  }
+  if (lookupBudget) {
+    const budgetEl = document.getElementById("budget");
+    if (budgetEl) {
+      budgetEl.value = lookupBudget.value;
+      document.getElementById("budget-val").textContent = "₹" + Number(lookupBudget.value).toLocaleString("en-IN");
+    }
+  }
+  if (lookupGroup) {
+    const groupEl = document.querySelector(`input[name='group'][value='${lookupGroup.value}']`);
+    if (groupEl) {
+      groupEl.checked = true;
+      document.querySelectorAll(".radio-btn").forEach(l => {
+        l.classList.toggle("active", l.querySelector("input")?.value === lookupGroup.value && l.closest("#tab-discover"));
+      });
+    }
+  }
+
+  // Pre-fill the query field with the destination name
   const queryEl = document.getElementById("query");
   if (queryEl) queryEl.value = match ? match.name : val;
 
-  // Use current form values (defaults if not set)
   doSearch();
 }
 

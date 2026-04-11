@@ -258,23 +258,28 @@ def generate_plan(
         )
         return
 
+    prompt = build_prompt(destination_name, state, chunks, days,
+                          budget_per_day, group_type, vibes, extra_query,
+                          live_snippets)
+
     if groq_key:
-        logger.info(f"Generating with Groq ({GROQ_MODEL})")
-        prompt = build_prompt(destination_name, state, chunks, days,
-                              budget_per_day, group_type, vibes, extra_query,
-                              live_snippets)
-        yield from _stream_groq(prompt, groq_key)
+        try:
+            logger.info(f"Generating with Groq ({GROQ_MODEL})")
+            yield from _stream_groq(prompt, groq_key)
+            return
+        except Exception as e:
+            logger.warning(f"Groq failed ({e}), trying fallback")
 
-    elif gemini_key:
-        logger.info(f"Generating with Gemini ({GEMINI_MODEL})")
-        prompt = build_prompt(destination_name, state, chunks, days,
-                              budget_per_day, group_type, vibes, extra_query,
-                              live_snippets)
-        yield from _stream_gemini(prompt, gemini_key)
+    if gemini_key:
+        try:
+            logger.info(f"Generating with Gemini ({GEMINI_MODEL})")
+            yield from _stream_gemini(prompt, gemini_key)
+            return
+        except Exception as e:
+            logger.warning(f"Gemini failed ({e}), using chunk fallback")
 
-    else:
-        logger.info("No LLM API key — using chunk-format fallback")
-        yield from _format_chunks_fallback(chunks, destination_name, days, group_type)
+    logger.info("Using chunk-format fallback")
+    yield from _format_chunks_fallback(chunks, destination_name, days, group_type)
 
 
 # ── JSON prompt builder ──────────────────────────────────────────────────────

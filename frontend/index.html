@@ -43,21 +43,6 @@
   </div>
 </section>
 
-<!-- ===== DESTINATION QUICK LOOKUP ===== -->
-<div class="quick-lookup-wrap">
-  <div class="quick-lookup">
-    <span class="quick-lookup-label">Know where you want to go?</span>
-    <div class="quick-lookup-row">
-      <input type="text" id="dest-quick-input" class="quick-lookup-input"
-        placeholder="e.g. Manali, Goa, Coorg…"
-        list="dest-suggestions"
-        onkeydown="if(event.key==='Enter') lookupDestination()" />
-      <datalist id="dest-suggestions"></datalist>
-      <button class="btn-quick-lookup" onclick="lookupDestination()">Look Up →</button>
-    </div>
-  </div>
-</div>
-
 <!-- ===== SEARCH PANEL (floats below hero) ===== -->
 <div class="search-float-wrap">
   <section class="search-panel">
@@ -66,68 +51,125 @@
       <span class="search-panel-sub">Tell us what you want — we'll find the perfect destination</span>
     </div>
 
-    <div class="form-grid">
-      <div class="form-group">
-        <label for="city">Your City</label>
-        <div class="city-row">
-          <input type="text" id="city" placeholder="e.g. Delhi, Mumbai, Bangalore" />
-          <button class="btn-gps" id="btn-gps" onclick="getGPS()" title="Use my location">📍</button>
+    <!-- Tabs -->
+    <div class="search-tabs">
+      <button class="search-tab active" onclick="switchSearchTab('discover', this)">🔍 Discover</button>
+      <button class="search-tab" onclick="switchSearchTab('lookup', this)">🎯 I Know Where to Go</button>
+    </div>
+
+    <!-- Tab: Discover (full form) -->
+    <div class="search-tab-pane active" id="tab-discover">
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="city">Your City</label>
+          <div class="city-row">
+            <input type="text" id="city" placeholder="e.g. Delhi, Mumbai, Bangalore" />
+            <button class="btn-gps" id="btn-gps" onclick="getGPS()" title="Use my location">📍</button>
+          </div>
+          <span class="gps-status" id="gps-status"></span>
         </div>
-        <span class="gps-status" id="gps-status"></span>
-      </div>
 
-      <div class="form-group">
-        <label for="days">Days <span id="days-val" class="badge">5</span></label>
-        <input type="range" id="days" min="1" max="20" value="5" />
-      </div>
+        <div class="form-group">
+          <label for="days">Days <span id="days-val" class="badge">5</span></label>
+          <input type="range" id="days" min="1" max="20" value="5" />
+        </div>
 
-      <div class="form-group">
-        <label for="budget">Budget / Day <span id="budget-val" class="badge">₹2,000</span></label>
-        <input type="range" id="budget" min="500" max="15000" step="500" value="2000" />
-      </div>
+        <div class="form-group">
+          <label for="budget">Budget / Day <span id="budget-val" class="badge">₹2,000</span></label>
+          <input type="range" id="budget" min="500" max="15000" step="500" value="2000" />
+        </div>
 
-      <div class="form-group">
-        <label>Travel Group</label>
-        <div class="radio-group">
-          <label class="radio-btn"><input type="radio" name="group" value="solo" /> Solo</label>
-          <label class="radio-btn"><input type="radio" name="group" value="couple" /> Couple</label>
-          <label class="radio-btn active"><input type="radio" name="group" value="friends" checked /> Friends</label>
-          <label class="radio-btn"><input type="radio" name="group" value="family" /> Family</label>
+        <div class="form-group">
+          <label>Travel Group</label>
+          <div class="radio-group">
+            <label class="radio-btn"><input type="radio" name="group" value="solo" /> Solo</label>
+            <label class="radio-btn"><input type="radio" name="group" value="couple" /> Couple</label>
+            <label class="radio-btn active"><input type="radio" name="group" value="friends" checked /> Friends</label>
+            <label class="radio-btn"><input type="radio" name="group" value="family" /> Family</label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="month">Travel Month</label>
+          <select id="month">
+            <option value="0">Current Month</option>
+            <option value="1">January</option><option value="2">February</option>
+            <option value="3">March</option><option value="4">April</option>
+            <option value="5">May</option><option value="6">June</option>
+            <option value="7">July</option><option value="8">August</option>
+            <option value="9">September</option><option value="10">October</option>
+            <option value="11">November</option><option value="12">December</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="query">Describe Your Trip</label>
+          <input type="text" id="query" placeholder="e.g. peaceful mountains, adventure rafting…" />
         </div>
       </div>
 
-      <div class="form-group">
-        <label for="month">Travel Month</label>
-        <select id="month">
-          <option value="0">Current Month</option>
-          <option value="1">January</option><option value="2">February</option>
-          <option value="3">March</option><option value="4">April</option>
-          <option value="5">May</option><option value="6">June</option>
-          <option value="7">July</option><option value="8">August</option>
-          <option value="9">September</option><option value="10">October</option>
-          <option value="11">November</option><option value="12">December</option>
-        </select>
+      <div class="form-group full-width vibe-section">
+        <label>Travel Vibe <span class="hint">(select all that apply)</span></label>
+        <div class="vibes-grid" id="vibes-grid"></div>
       </div>
 
-      <div class="form-group">
-        <label for="query">Describe Your Trip</label>
-        <input type="text" id="query" placeholder="e.g. peaceful mountains, adventure rafting…" />
+      <div class="search-footer">
+        <button class="btn-search" id="search-btn" onclick="doSearch()">
+          <span>🔍</span> Find Destinations
+        </button>
       </div>
     </div>
 
-    <div class="form-group full-width vibe-section">
-      <label>Travel Vibe <span class="hint">(select all that apply)</span></label>
-      <div class="vibes-grid" id="vibes-grid"></div>
+    <!-- Tab: I Know Where to Go -->
+    <div class="search-tab-pane" id="tab-lookup">
+      <div class="lookup-row">
+        <div class="form-group lookup-dest-group">
+          <label for="dest-lookup-input">Destination</label>
+          <input type="text" id="dest-lookup-input" class="lookup-dest-input"
+            placeholder="e.g. Manali, Goa, Coorg…"
+            list="dest-suggestions"
+            onkeydown="if(event.key==='Enter') lookupDestination()" />
+          <datalist id="dest-suggestions"></datalist>
+        </div>
+        <div class="form-group lookup-dest-group">
+          <label for="lookup-city">Your City <span class="hint">(for distance &amp; cost)</span></label>
+          <div class="city-row">
+            <input type="text" id="lookup-city" placeholder="e.g. Delhi, Mumbai…" />
+            <button class="btn-gps" id="btn-gps-lookup" onclick="getLookupGPS()" title="Use my location">📍</button>
+          </div>
+          <span class="gps-status" id="gps-status-lookup"></span>
+        </div>
+      </div>
+      <div class="lookup-mini-grid">
+        <div class="form-group">
+          <label for="lookup-days">Days <span id="lookup-days-val" class="badge">5</span></label>
+          <input type="range" id="lookup-days" min="1" max="20" value="5"
+            oninput="document.getElementById('lookup-days-val').textContent=this.value" />
+        </div>
+        <div class="form-group">
+          <label for="lookup-budget">Budget / Day <span id="lookup-budget-val" class="badge">₹2,000</span></label>
+          <input type="range" id="lookup-budget" min="500" max="15000" step="500" value="2000"
+            oninput="document.getElementById('lookup-budget-val').textContent='₹'+Number(this.value).toLocaleString('en-IN')" />
+        </div>
+        <div class="form-group">
+          <label>Travel Group</label>
+          <div class="radio-group">
+            <label class="radio-btn"><input type="radio" name="lookup-group" value="solo" /> Solo</label>
+            <label class="radio-btn"><input type="radio" name="lookup-group" value="couple" /> Couple</label>
+            <label class="radio-btn active"><input type="radio" name="lookup-group" value="friends" checked /> Friends</label>
+            <label class="radio-btn"><input type="radio" name="lookup-group" value="family" /> Family</label>
+          </div>
+        </div>
+      </div>
+      <div class="search-footer">
+        <button class="btn-search" onclick="lookupDestination()">
+          <span>🎯</span> Look Up Destination
+        </button>
+      </div>
     </div>
 
     <!-- hidden top-k always 30 -->
     <input type="hidden" id="top-k" value="30" />
-
-    <div class="search-footer">
-      <button class="btn-search" id="search-btn" onclick="doSearch()">
-        <span>🔍</span> Find Destinations
-      </button>
-    </div>
   </section>
 </div>
 
