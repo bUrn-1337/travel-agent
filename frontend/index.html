@@ -43,6 +43,21 @@
   </div>
 </section>
 
+<!-- ===== DESTINATION QUICK LOOKUP ===== -->
+<div class="quick-lookup-wrap">
+  <div class="quick-lookup">
+    <span class="quick-lookup-label">Know where you want to go?</span>
+    <div class="quick-lookup-row">
+      <input type="text" id="dest-quick-input" class="quick-lookup-input"
+        placeholder="e.g. Manali, Goa, Coorg…"
+        list="dest-suggestions"
+        onkeydown="if(event.key==='Enter') lookupDestination()" />
+      <datalist id="dest-suggestions"></datalist>
+      <button class="btn-quick-lookup" onclick="lookupDestination()">Look Up →</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== SEARCH PANEL (floats below hero) ===== -->
 <div class="search-float-wrap">
   <section class="search-panel">
@@ -105,15 +120,10 @@
       <div class="vibes-grid" id="vibes-grid"></div>
     </div>
 
+    <!-- hidden top-k always 30 -->
+    <input type="hidden" id="top-k" value="30" />
+
     <div class="search-footer">
-      <div class="form-group inline-row">
-        <label for="top-k">Show up to</label>
-        <select id="top-k">
-          <option value="15">15 destinations</option>
-          <option value="30" selected>30 destinations</option>
-          <option value="50">50 destinations</option>
-        </select>
-      </div>
       <button class="btn-search" id="search-btn" onclick="doSearch()">
         <span>🔍</span> Find Destinations
       </button>

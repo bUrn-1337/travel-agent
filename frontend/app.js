@@ -13,10 +13,15 @@ let _genControllers = [];
 
 // P4: Map + filter state
 let _map         = null;
-let _allGeoMarkers = {};   // id → Leaflet marker (all 144)
-let _allGeo      = [];     // full geo payload from /api/destinations/geo
+let _allGeoMarkers = {};
+let _allGeo      = [];
 let _activeFilters = { region: "", budget: "", season: "" };
 let _filteredResults = [];
+
+// Cross-off / visited state
+let _visitedDestIds   = new Set(JSON.parse(localStorage.getItem("visitedDests") || "[]"));
+let _currentTopPickIds = [];   // IDs currently rendered as top picks (in order)
+let _lastSearchPayload = null; // stored so replacement cards can re-use it
 
 /* ===== VIBES CONFIG ===== */
 const VIBES = [
@@ -48,6 +53,7 @@ document.addEventListener("DOMContentLoaded", () => {
   bindRadioButtons();
   bindFilterChips();
   renderSavedSection();
+  loadDestAutocomplete();
 
   // Lazy-load map when it scrolls into view (shown after first search)
   const mapSection = document.getElementById("map-section");
@@ -209,29 +215,30 @@ function renderTopPicks(topPicks, queryInfo, searchPayload) {
 
   if (!topPicks || topPicks.length === 0) return;
 
+  // Store for cross-off replacements
+  _lastSearchPayload  = searchPayload;
+  _currentTopPickIds  = topPicks.map(d => d.id);
+
   section.style.display = "block";
   sub.textContent = `Generating personalised travel plans for your top ${topPicks.length} matches...`;
 
   if (queryInfo.gps_active) gpsBadge.style.display = "inline";
   else gpsBadge.style.display = "none";
 
-  // P3: Render comparison table first (uses cost_estimate from search response)
   const compEl = document.getElementById("comparison-table-wrap");
   if (compEl) compEl.innerHTML = renderComparisonTable(topPicks, searchPayload);
 
   grid.innerHTML = topPicks.map((dest, i) => topPickCard(dest, i + 1)).join("");
 
-  // Auto-trigger streaming generation for each top pick in parallel
   topPicks.forEach((dest) => {
-    const planPayload = {
+    streamPlanIntoCard(dest.id, {
       destination_id: dest.id,
       days:           searchPayload.days,
       budget_per_day: searchPayload.budget_per_day,
       group_type:     searchPayload.group_type,
       vibes:          searchPayload.vibes,
       query:          searchPayload.query || "",
-    };
-    streamPlanIntoCard(dest.id, planPayload);
+    });
   });
 }
 
@@ -385,6 +392,9 @@ function topPickCard(dest, rank) {
     <div class="pick-save-row">
       <button class="btn-save pick-save-btn" onclick='toggleSave(${JSON.stringify(dest)})' id="save-btn-${dest.id}">
         ${isSaved(dest.id) ? "★ Saved" : "☆ Save"}
+      </button>
+      <button class="btn-been-there" onclick="crossOffTopPick('${dest.id}')" title="Already visited — show me the next option">
+        ✓ Been there
       </button>
     </div>
   </div>`;
@@ -758,6 +768,100 @@ async function generatePlanStructured(destId) {
   }
 }
 
+
+/* ===== CROSS OFF / VISITED ===== */
+function crossOffTopPick(destId) {
+  _visitedDestIds.add(destId);
+  localStorage.setItem("visitedDests", JSON.stringify([..._visitedDestIds]));
+
+  const card = document.getElementById(`pick-card-${destId}`);
+  if (card) {
+    card.style.transition = "opacity .25s, transform .25s";
+    card.style.opacity    = "0";
+    card.style.transform  = "scale(.95)";
+    setTimeout(() => {
+      card.remove();
+      _currentTopPickIds = _currentTopPickIds.filter(id => id !== destId);
+      _addNextTopPick();
+    }, 260);
+  }
+}
+
+function _addNextTopPick() {
+  const next = lastResults.find(d =>
+    !_currentTopPickIds.includes(d.id) && !_visitedDestIds.has(d.id)
+  );
+  if (!next) {
+    const sub = document.querySelector(".top-picks-sub");
+    if (sub) sub.textContent = "No more options — try a new search.";
+    return;
+  }
+
+  _currentTopPickIds.push(next.id);
+  const rank = _currentTopPickIds.length;
+
+  const grid = document.getElementById("top-picks-grid");
+  const wrap = document.createElement("div");
+  wrap.innerHTML = topPickCard(next, rank);
+  const cardEl = wrap.firstElementChild;
+  cardEl.style.opacity   = "0";
+  cardEl.style.transform = "translateY(16px)";
+  cardEl.style.transition = "opacity .3s, transform .3s";
+  grid.appendChild(cardEl);
+
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    cardEl.style.opacity   = "1";
+    cardEl.style.transform = "translateY(0)";
+  }));
+
+  if (_lastSearchPayload) {
+    streamPlanIntoCard(next.id, {
+      destination_id: next.id,
+      days:           _lastSearchPayload.days,
+      budget_per_day: _lastSearchPayload.budget_per_day,
+      group_type:     _lastSearchPayload.group_type,
+      vibes:          _lastSearchPayload.vibes,
+      query:          _lastSearchPayload.query || "",
+    });
+  }
+}
+
+/* ===== DESTINATION QUICK LOOKUP ===== */
+async function loadDestAutocomplete() {
+  if (_allGeo.length) { _populateDatalist(); return; }
+  try {
+    const resp = await fetch(`${API_BASE}/api/destinations/geo`);
+    _allGeo = await resp.json();
+    _populateDatalist();
+  } catch {}
+}
+
+function _populateDatalist() {
+  const dl = document.getElementById("dest-suggestions");
+  if (!dl) return;
+  dl.innerHTML = _allGeo
+    .map(d => `<option value="${d.name}, ${d.state}">`)
+    .join("");
+}
+
+function lookupDestination() {
+  const input = document.getElementById("dest-quick-input");
+  const val   = (input?.value || "").trim();
+  if (!val) return;
+
+  // Match against loaded geo list
+  const match = _allGeo.find(d =>
+    d.name.toLowerCase() === val.toLowerCase() ||
+    `${d.name}, ${d.state}`.toLowerCase() === val.toLowerCase()
+  );
+
+  // Pre-fill the query field and run a search
+  const queryEl = document.getElementById("query");
+  if (queryEl) queryEl.value = match ? match.name : val;
+
+  // Use current form values (defaults if not set)
+  doSearch();
+}
 
 /* ===== EXPORT PLAN ===== */
 function exportPlan(mode) {

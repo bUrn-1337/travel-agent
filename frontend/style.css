@@ -157,6 +157,69 @@ h1,h2,h3,h4 { font-family: 'Space Grotesk', 'Inter', sans-serif; }
 .hero-stat-label { font-size: .72rem; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .06em; }
 .hero-stat-divider { width: 1px; height: 32px; background: var(--border); }
 
+/* ===== DESTINATION QUICK LOOKUP ===== */
+.quick-lookup-wrap {
+  max-width: 1200px;
+  margin: -5rem auto 0;
+  padding: 0 1.5rem;
+  position: relative;
+  z-index: 11;
+  display: flex;
+  justify-content: flex-end;
+}
+.quick-lookup {
+  background: rgba(74,222,128,.08);
+  border: 1px solid rgba(74,222,128,.2);
+  border-radius: 12px;
+  padding: .75rem 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+  flex-wrap: wrap;
+  backdrop-filter: blur(10px);
+}
+.quick-lookup-label {
+  font-size: .75rem;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.quick-lookup-row {
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+}
+.quick-lookup-input {
+  padding: .5rem .9rem;
+  border: 1.5px solid rgba(74,222,128,.3);
+  border-radius: 8px;
+  background: rgba(0,0,0,.25);
+  color: var(--text);
+  font-size: .88rem;
+  font-family: inherit;
+  width: 230px;
+  transition: border-color .15s;
+}
+.quick-lookup-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.quick-lookup-input::placeholder { color: var(--muted); }
+.btn-quick-lookup {
+  padding: .5rem 1rem;
+  background: var(--accent);
+  color: #071a0e;
+  border: none;
+  border-radius: 8px;
+  font-size: .82rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s;
+}
+.btn-quick-lookup:hover { background: #6ee79e; }
+
 /* ===== SEARCH PANEL (floats below hero) ===== */
 .search-float-wrap {
   max-width: 1200px;
@@ -534,6 +597,22 @@ input[type="range"] {
   transition: all .15s;
 }
 .btn-save:hover { border-color: var(--yellow); color: var(--yellow); }
+.btn-been-there {
+  background: none;
+  border: 1.5px solid var(--border-2);
+  border-radius: 8px;
+  padding: .38rem .85rem;
+  font-size: .78rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--muted);
+  transition: all .15s;
+}
+.btn-been-there:hover {
+  border-color: var(--red);
+  color: var(--red);
+  background: rgba(248,113,113,.08);
+}
 .card-save-btn { padding: .15rem .5rem; font-size: .85rem; border-radius: 6px; min-width: 28px; }
 
 /* ===== GENERATE BUTTON ===== */
