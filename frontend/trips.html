@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TravelMind — My Trips</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="destination.css" />
+  <link rel="stylesheet" href="trips.css" />
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="navbar-inner">
+    <div class="nav-brand">
+      <a href="/" class="nav-brand-link">
+        <span class="nav-logo-icon">🗺️</span>
+        <span class="nav-logo-text">TravelMind</span>
+      </a>
+    </div>
+    <div style="display:flex;align-items:center;gap:.75rem">
+      <span class="nav-pill accent">My Trips</span>
+      <div id="auth-nav" class="nav-auth-slot"></div>
+    </div>
+  </div>
+</nav>
+
+<main class="trips-main">
+  <div class="trips-header">
+    <h1 class="trips-title">My Saved Trips</h1>
+    <p class="trips-sub" id="trips-sub">Loading…</p>
+  </div>
+
+  <div id="trips-login-prompt" style="display:none" class="trips-login-prompt">
+    <p>Sign in to view your saved trips.</p>
+    <a href="/auth/google" class="btn-generate-plan" style="text-decoration:none;display:inline-block;margin-top:1rem">
+      Sign in with Google
+    </a>
+  </div>
+
+  <div id="trips-grid" class="trips-grid"></div>
+</main>
+
+<!-- Plan Modal -->
+<div class="modal-overlay" id="plan-modal" onclick="closePlanModal()" style="display:none">
+  <div class="modal-card" onclick="event.stopPropagation()" style="max-width:760px">
+    <button class="modal-close" onclick="closePlanModal()">✕</button>
+    <div id="plan-modal-content"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="auth.js"></script>
+<script src="trips.js"></script>
+</body>
+</html>

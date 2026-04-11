@@ -10,10 +10,12 @@ from pathlib import Path
 from datetime import datetime
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+import secrets
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, RedirectResponse, JSONResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 # Add project root to path so relative imports work
 sys.path.insert(0, str(Path(__file__).parent))
@@ -26,6 +28,9 @@ from rag.retriever import retrieve_for_plan
 from ranking.scorer import rank_destinations
 from ranking.cost_estimator import estimate_trip_cost
 from rag.photo_fetcher import get_photo_url, get_photos
+from database import get_db, init_db
+from models import User, SavedTrip
+import auth as auth_utils
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -82,6 +87,8 @@ BOOST = {
 # ---------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("Initialising database...")
+    init_db()
     logger.info("Building semantic index...")
     build_index(DESTINATIONS)
     yield
@@ -495,3 +502,158 @@ def rag_status():
 @app.get("/health")
 def health():
     return {"status": "ok", "destinations_loaded": len(DESTINATIONS), "rag_chunks": chunk_count()}
+
+
+# ---------------------------------------------------------------------------
+# P7 — AUTH ROUTES
+# ---------------------------------------------------------------------------
+
+@app.get("/auth/google")
+def google_login(response: RedirectResponse = None):
+    """Redirect browser to Google OAuth consent screen."""
+    state = secrets.token_urlsafe(16)
+    url   = auth_utils.get_google_auth_url(state)
+    resp  = RedirectResponse(url=url)
+    resp.set_cookie("oauth_state", state, httponly=True, samesite="lax", max_age=300)
+    return resp
+
+
+@app.get("/auth/google/callback")
+def google_callback(code: str = None, state: str = None, error: str = None,
+                    request: Request = None, db: Session = Depends(get_db)):
+    """Handle Google OAuth callback, create/update user, set JWT cookie."""
+    frontend = auth_utils.FRONTEND_URL
+
+    if error or not code:
+        return RedirectResponse(url=f"{frontend}/?auth_error=access_denied")
+
+    try:
+        tokens      = auth_utils.exchange_code(code)
+        google_user = auth_utils.get_google_user(tokens["access_token"])
+    except Exception as e:
+        logger.error(f"OAuth error: {e}")
+        return RedirectResponse(url=f"{frontend}/?auth_error=oauth_failed")
+
+    # Upsert user
+    user = db.query(User).filter(User.google_id == google_user["sub"]).first()
+    if not user:
+        user = User(
+            google_id  = google_user["sub"],
+            email      = google_user.get("email", ""),
+            name       = google_user.get("name", ""),
+            avatar_url = google_user.get("picture"),
+        )
+        db.add(user)
+    else:
+        user.name       = google_user.get("name", user.name)
+        user.avatar_url = google_user.get("picture", user.avatar_url)
+    db.commit()
+    db.refresh(user)
+
+    token = auth_utils.create_jwt(user.id)
+    resp  = RedirectResponse(url=f"{frontend}/?login=success")
+    auth_utils.set_auth_cookie(resp, token)
+    resp.delete_cookie("oauth_state")
+    return resp
+
+
+@app.get("/auth/me")
+def get_me(request: Request, db: Session = Depends(get_db)):
+    """Return current user info from JWT cookie."""
+    user = auth_utils.get_optional_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return {"id": user.id, "name": user.name, "email": user.email, "avatar_url": user.avatar_url}
+
+
+@app.post("/auth/logout")
+def logout():
+    resp = JSONResponse({"message": "Logged out"})
+    auth_utils.clear_auth_cookie(resp)
+    return resp
+
+
+# ---------------------------------------------------------------------------
+# P7 — TRIP ROUTES
+# ---------------------------------------------------------------------------
+
+class SaveTripRequest(BaseModel):
+    destination_id:   str       = Field(...)
+    destination_name: str       = Field(...)
+    destination_data: dict      = Field(...)
+    plan_markdown:    str       = Field(default="")
+    days:             int       = Field(default=5)
+    budget_per_day:   int       = Field(default=2000)
+    group_type:       str       = Field(default="friends")
+    vibes:            list[str] = Field(default=[])
+    photo_url:        str | None = Field(default=None)
+
+
+@app.post("/api/trips")
+def save_trip(req: SaveTripRequest, request: Request,
+              db: Session = Depends(get_db)):
+    user = auth_utils.get_current_user(request, db)
+    trip = SavedTrip(
+        user_id          = user.id,
+        destination_id   = req.destination_id,
+        destination_name = req.destination_name,
+        destination_data = req.destination_data,
+        plan_markdown    = req.plan_markdown,
+        days             = req.days,
+        budget_per_day   = req.budget_per_day,
+        group_type       = req.group_type,
+        vibes            = req.vibes,
+        photo_url        = req.photo_url,
+    )
+    db.add(trip)
+    db.commit()
+    db.refresh(trip)
+    return {"id": trip.id, "message": "Trip saved"}
+
+
+@app.get("/api/trips")
+def list_trips(request: Request, db: Session = Depends(get_db)):
+    user  = auth_utils.get_current_user(request, db)
+    trips = (db.query(SavedTrip)
+               .filter(SavedTrip.user_id == user.id)
+               .order_by(SavedTrip.created_at.desc())
+               .all())
+    return [t.to_dict() for t in trips]
+
+
+@app.delete("/api/trips/{trip_id}")
+def delete_trip(trip_id: str, request: Request, db: Session = Depends(get_db)):
+    user = auth_utils.get_current_user(request, db)
+    trip = db.query(SavedTrip).filter(
+        SavedTrip.id == trip_id, SavedTrip.user_id == user.id
+    ).first()
+    if not trip:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    db.delete(trip)
+    db.commit()
+    return {"message": "Deleted"}
+
+
+@app.post("/api/trips/{trip_id}/share")
+def share_trip(trip_id: str, request: Request, db: Session = Depends(get_db)):
+    user = auth_utils.get_current_user(request, db)
+    trip = db.query(SavedTrip).filter(
+        SavedTrip.id == trip_id, SavedTrip.user_id == user.id
+    ).first()
+    if not trip:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    trip.is_public = True
+    db.commit()
+    share_url = f"{auth_utils.FRONTEND_URL}/trip/{trip.id}"
+    return {"share_url": share_url}
+
+
+@app.get("/api/share/{trip_id}")
+def get_shared_trip(trip_id: str, db: Session = Depends(get_db)):
+    """Public endpoint — returns a trip that has been made shareable."""
+    trip = db.query(SavedTrip).filter(
+        SavedTrip.id == trip_id, SavedTrip.is_public == True  # noqa: E712
+    ).first()
+    if not trip:
+        raise HTTPException(status_code=404, detail="Trip not found or not public")
+    return trip.to_dict()

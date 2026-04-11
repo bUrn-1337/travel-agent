@@ -13,6 +13,8 @@ let _planController = null;
 /* ===== INIT ===== */
 const destId = new URLSearchParams(window.location.search).get("id");
 
+document.addEventListener("DOMContentLoaded", () => { TravelAuth.init(); });
+
 if (!destId) {
   document.body.innerHTML = `<div style="padding:4rem;text-align:center;color:#f87171">
     No destination specified. <a href="/" style="color:#4ade80">Go back →</a>
@@ -255,9 +257,46 @@ async function generatePlan() {
   } catch (err) {
     if (err.name === "AbortError") return;
     output.innerHTML = `<p style="color:#f87171">Failed to generate plan — <button class="btn-retry-plan" onclick="generatePlan()">↺ Retry</button></p>`;
+    // Show save trip button after plan generation
+    if (TravelAuth.isLoggedIn()) {
+      const controls = document.querySelector(".dest-plan-controls");
+      if (controls && !document.getElementById("btn-save-dest-trip")) {
+        const saveBtn = document.createElement("button");
+        saveBtn.id = "btn-save-dest-trip";
+        saveBtn.className = "btn-generate-plan";
+        saveBtn.style.cssText = "background:none;border:1.5px solid var(--accent);color:var(--accent);";
+        saveBtn.textContent = "💾 Save Trip";
+        saveBtn.onclick = saveDestTrip;
+        controls.appendChild(saveBtn);
+      }
+    }
   } finally {
     btn.disabled = false;
     btn.textContent = "Generate Plan";
+  }
+}
+
+async function saveDestTrip() {
+  const btn = document.getElementById("btn-save-dest-trip");
+  if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+
+  const days   = parseInt(document.getElementById("plan-days").value) || 5;
+  const budget = parseInt(document.getElementById("plan-budget").value) || 2000;
+  const group  = document.getElementById("plan-group").value;
+  const planMd = document.getElementById("dest-plan-output")?.innerText || "";
+
+  const id = await TravelAuth.saveTrip({
+    destination:  _destData,
+    planMarkdown: planMd,
+    days, budgetPerDay: budget, groupType: group,
+    vibes:    _destData.vibes || [],
+    photoUrl: _heroPhotos[0] || null,
+  });
+
+  if (btn) {
+    btn.textContent = id ? "✓ Saved" : "💾 Save Trip";
+    btn.disabled = !!id;
+    if (id) btn.style.color = "var(--accent)";
   }
 }
 

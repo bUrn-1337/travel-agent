@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TravelMind — Shared Trip</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/destination.css" />
+  <link rel="stylesheet" href="/trip.css" />
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="navbar-inner">
+    <div class="nav-brand">
+      <a href="/" class="nav-brand-link">
+        <span class="nav-logo-icon">🗺️</span>
+        <span class="nav-logo-text">TravelMind</span>
+      </a>
+    </div>
+    <div style="display:flex;align-items:center;gap:.75rem">
+      <span class="nav-pill">Shared Trip</span>
+      <div id="auth-nav" class="nav-auth-slot"></div>
+    </div>
+  </div>
+</nav>
+
+<div id="trip-error" style="display:none;padding:4rem;text-align:center;color:var(--text-2)">
+  <h2 style="color:var(--red);margin-bottom:.5rem">Trip not found</h2>
+  <p>This trip may have been deleted or is no longer public.</p>
+  <a href="/" style="color:var(--accent);margin-top:1rem;display:inline-block">← Explore destinations</a>
+</div>
+
+<!-- Hero -->
+<div class="dest-hero" id="trip-hero" style="display:none">
+  <div class="dest-hero-overlay"></div>
+  <div class="dest-hero-content" id="trip-hero-content"></div>
+</div>
+
+<main class="dest-main" id="trip-main" style="display:none">
+
+  <!-- Trip meta -->
+  <section class="dest-section">
+    <h2 class="dest-section-title">Trip Details</h2>
+    <div class="dest-stats-grid" id="trip-meta"></div>
+  </section>
+
+  <!-- AI Plan -->
+  <section class="dest-section">
+    <h2 class="dest-section-title">Travel Plan</h2>
+    <div class="dest-plan-output" id="trip-plan"></div>
+  </section>
+
+  <!-- CTA -->
+  <section class="dest-section trip-cta-section">
+    <p class="trip-cta-text">Want to plan your own trip to <span id="cta-dest-name"></span>?</p>
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-top:1rem">
+      <a id="cta-dest-link" href="/" class="btn-generate-plan" style="text-decoration:none">View Destination →</a>
+      <a href="/" class="btn-generate-plan" style="background:none;border:1.5px solid var(--accent);color:var(--accent);text-decoration:none">Explore All Destinations</a>
+    </div>
+  </section>
+
+  <!-- Shared by -->
+  <div class="trip-shared-by" id="trip-shared-by"></div>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="/auth.js"></script>
+<script src="/trip.js"></script>
+</body>
+</html>

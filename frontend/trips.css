@@ -1,0 +1,120 @@
+/* ===== TRIPS PAGE ===== */
+.trips-main {
+  max-width: 1200px;
+  margin: 2.5rem auto;
+  padding: 0 1.5rem;
+}
+.trips-header {
+  margin-bottom: 2rem;
+}
+.trips-title {
+  font-size: 1.5rem; font-weight: 700; color: var(--text);
+  margin-bottom: .3rem;
+}
+.trips-sub { font-size: .85rem; color: var(--muted); }
+
+.trips-login-prompt {
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  padding: 3rem;
+  text-align: center;
+  color: var(--text-2);
+}
+
+.trips-empty {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--text-2);
+}
+
+/* Grid */
+.trips-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.25rem;
+}
+
+/* Trip Card */
+.trip-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: transform .18s, box-shadow .18s;
+}
+.trip-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow);
+}
+
+/* Hero */
+.trip-card-hero {
+  height: 140px;
+  position: relative;
+  background: linear-gradient(135deg, #1e3a5f, #2563eb);
+}
+.trip-card-hero[data-vibe="mountains"]  { background: linear-gradient(135deg, #0f2e40, #1a5c7a); }
+.trip-card-hero[data-vibe="beach"]      { background: linear-gradient(135deg, #054030, #0a8060); }
+.trip-card-hero[data-vibe="heritage"]   { background: linear-gradient(135deg, #4a1e06, #8b3a0e); }
+.trip-card-hero[data-vibe="adventure"]  { background: linear-gradient(135deg, #0a2e18, #1d7a40); }
+.trip-card-hero[data-vibe="wildlife"]   { background: linear-gradient(135deg, #0a2e10, #2a6e2e); }
+.trip-card-hero[data-vibe="spiritual"]  { background: linear-gradient(135deg, #2c0f5c, #7c3aed); }
+.trip-card-hero[data-vibe="offbeat"]    { background: linear-gradient(135deg, #0e2a3a, #0e7a7a); }
+.trip-card-hero[data-vibe="desert"]     { background: linear-gradient(135deg, #4a1500, #b54000); }
+.trip-card-hero[data-vibe="backwaters"] { background: linear-gradient(135deg, #032e22, #099658); }
+.trip-card-hero[data-vibe="honeymoon"]  { background: linear-gradient(135deg, #4a0824, #be185d); }
+.trip-card-hero[data-vibe="nature"]     { background: linear-gradient(135deg, #0a2e18, #1e7a3a); }
+.trip-card-hero[data-vibe="trekking"]   { background: linear-gradient(135deg, #0f2e40, #1a5c7a); }
+
+.trip-card-hero-content {
+  position: absolute;
+  bottom: .9rem; left: 1rem; right: 1rem;
+  z-index: 1;
+}
+.trip-card-name {
+  font-size: 1.05rem; font-weight: 700; color: #fff;
+  margin-bottom: .2rem;
+}
+.trip-card-meta {
+  font-size: .72rem; color: rgba(255,255,255,.7);
+}
+
+/* Body */
+.trip-card-body { padding: .9rem 1rem .5rem; }
+.trip-card-vibes { display: flex; flex-wrap: wrap; gap: .3rem; margin-bottom: .6rem; }
+.trip-card-preview {
+  font-size: .8rem; color: var(--text-2); line-height: 1.55;
+  margin-bottom: .5rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.trip-card-date { font-size: .7rem; color: var(--muted); }
+
+/* Actions */
+.trip-card-actions {
+  display: flex; flex-wrap: wrap; gap: .4rem;
+  padding: .6rem 1rem .9rem;
+  border-top: 1px solid var(--border);
+}
+.btn-trip-action {
+  padding: .35rem .75rem;
+  font-size: .75rem; font-weight: 600;
+  border: 1.5px solid var(--border-2);
+  border-radius: 7px;
+  background: none;
+  color: var(--text-2);
+  cursor: pointer; font-family: inherit;
+  text-decoration: none;
+  transition: border-color .15s, color .15s;
+  white-space: nowrap;
+}
+.btn-trip-action:hover { border-color: var(--accent); color: var(--accent); }
+.btn-trip-action.accent {
+  border-color: rgba(74,222,128,.4);
+  color: var(--accent);
+  background: rgba(74,222,128,.08);
+}
+.btn-trip-action.danger:hover { border-color: var(--red); color: var(--red); }

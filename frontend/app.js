@@ -51,6 +51,7 @@ let lastRequestedVibes = [];
 
 /* ===== INIT ===== */
 document.addEventListener("DOMContentLoaded", () => {
+  TravelAuth.init();
   renderVibeChips();
   bindRangeSliders();
   bindRadioButtons();
@@ -572,6 +573,22 @@ async function streamPlanIntoCard(destId, payload) {
 
     if (section) section.textContent = "Travel plans ready.";
 
+    // Store plan markdown for save-trip
+    if (!window._planMarkdown) window._planMarkdown = {};
+    window._planMarkdown[destId] = rawMarkdown;
+
+    // Show "Save Trip" button if logged in
+    if (TravelAuth.isLoggedIn()) {
+      const saveRow = document.querySelector(`#pick-card-${destId} .pick-save-row`);
+      if (saveRow && !saveRow.querySelector(".btn-save-trip")) {
+        const btn = document.createElement("button");
+        btn.className = "btn-save-trip";
+        btn.textContent = "💾 Save Trip";
+        btn.onclick = () => saveTripFromCard(destId);
+        saveRow.prepend(btn);
+      }
+    }
+
   } catch (err) {
     if (err.name === "AbortError") return;
     if (loadingEl) loadingEl.style.display = "none";
@@ -1034,6 +1051,35 @@ function lookupDestination() {
   if (queryEl) queryEl.value = match ? match.name : val;
 
   doSearch();
+}
+
+/* ===== SAVE TRIP (P7) ===== */
+async function saveTripFromCard(destId) {
+  const dest = lastResults.find(d => d.id === destId);
+  if (!dest) return;
+  const btn = document.querySelector(`#pick-card-${destId} .btn-save-trip`);
+  if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+
+  const id = await TravelAuth.saveTrip({
+    destination:   dest,
+    planMarkdown:  window._planMarkdown?.[destId] || "",
+    days:          _lastSearchPayload?.days || 5,
+    budgetPerDay:  _lastSearchPayload?.budget_per_day || 2000,
+    groupType:     _lastSearchPayload?.group_type || "friends",
+    vibes:         _lastSearchPayload?.vibes || [],
+    photoUrl:      dest.photo_url || null,
+  });
+
+  if (btn) {
+    if (id) {
+      btn.textContent = "✓ Saved";
+      btn.style.color = "var(--accent)";
+      btn.disabled = true;
+    } else {
+      btn.textContent = "💾 Save Trip";
+      btn.disabled = false;
+    }
+  }
 }
 
 /* ===== EXPORT PLAN ===== */

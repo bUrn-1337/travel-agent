@@ -76,6 +76,25 @@ h1,h2,h3,h4 { font-family: 'Space Grotesk', 'Inter', sans-serif; }
   border-color: rgba(74,222,128,.25);
 }
 
+/* Auth nav slot */
+.nav-auth-slot { display: flex; align-items: center; gap: .5rem; }
+.nav-user-menu { display: flex; align-items: center; gap: .5rem; }
+.nav-avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 1.5px solid var(--accent);
+  object-fit: cover;
+}
+.nav-avatar-placeholder {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--accent); color: #071a0e;
+  font-size: .75rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.nav-user-name { font-size: .78rem; font-weight: 600; color: var(--text-2); }
+.nav-login-btn { text-decoration: none; cursor: pointer; display: flex; align-items: center; }
+.nav-logout-btn { background: none; border: 1px solid var(--border-2); cursor: pointer; font-family: inherit; }
+.nav-logout-btn:hover { border-color: var(--red); color: var(--red); }
+
 /* ===== HERO ===== */
 .hero {
   position: relative;
@@ -933,6 +952,20 @@ details[open] .results-grid { margin-top: 1rem; }
 .lightbox-nav:hover { background: rgba(255,255,255,.2); }
 .lightbox-nav.left  { left: .75rem; }
 .lightbox-nav.right { right: .75rem; }
+
+/* Save Trip button (P7) */
+.btn-save-trip {
+  padding: .45rem .9rem;
+  background: rgba(74,222,128,.12);
+  border: 1.5px solid rgba(74,222,128,.3);
+  border-radius: 8px;
+  color: var(--accent);
+  font-size: .8rem; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+  transition: background .15s, border-color .15s;
+}
+.btn-save-trip:hover { background: rgba(74,222,128,.2); border-color: var(--accent); }
+.btn-save-trip:disabled { opacity: .6; cursor: default; }
 
 /* Photos button */
 .btn-photos {

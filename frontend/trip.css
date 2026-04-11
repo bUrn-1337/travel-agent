@@ -1,0 +1,12 @@
+.trip-cta-section { text-align: center; }
+.trip-cta-text { font-size: .95rem; color: var(--text-2); }
+
+.trip-shared-by {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1.5rem 2rem;
+}
+.trip-sharer {
+  display: flex; align-items: center; gap: .6rem;
+  font-size: .82rem; color: var(--muted);
+}
