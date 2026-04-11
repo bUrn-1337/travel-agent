@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TravelMind — Destination</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="destination.css" />
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="navbar-inner">
+    <div class="nav-brand">
+      <a href="/" class="nav-brand-link">
+        <span class="nav-logo-icon">🗺️</span>
+        <span class="nav-logo-text">TravelMind</span>
+      </a>
+    </div>
+    <a href="/" class="btn-back">← Back to Search</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="dest-hero" id="dest-hero">
+  <div class="dest-hero-overlay"></div>
+  <div class="dest-hero-content" id="dest-hero-content">
+    <div class="dest-hero-loading">Loading…</div>
+  </div>
+  <div class="dest-hero-photo-nav" id="dest-hero-nav" style="display:none">
+    <button class="photo-nav-btn large" onclick="heroNav(-1)">&#8592;</button>
+    <span class="photo-nav-dots" id="hero-dots"></span>
+    <button class="photo-nav-btn large" onclick="heroNav(1)">&#8594;</button>
+  </div>
+</div>
+
+<!-- MAIN CONTENT -->
+<main class="dest-main" id="dest-main" style="display:none">
+
+  <!-- PHOTO GALLERY -->
+  <section class="dest-section" id="gallery-section" style="display:none">
+    <h2 class="dest-section-title">Photos</h2>
+    <div class="dest-gallery-grid" id="dest-gallery-grid"></div>
+  </section>
+
+  <!-- OVERVIEW -->
+  <section class="dest-section">
+    <h2 class="dest-section-title">Overview</h2>
+    <div class="dest-overview-grid">
+      <div class="dest-info-card" id="dest-description"></div>
+      <div class="dest-stats-grid" id="dest-stats"></div>
+    </div>
+  </section>
+
+  <!-- VIBES & HIGHLIGHTS -->
+  <div class="dest-two-col">
+    <section class="dest-section">
+      <h2 class="dest-section-title">Travel Vibes</h2>
+      <div class="dest-vibes" id="dest-vibes"></div>
+    </section>
+    <section class="dest-section">
+      <h2 class="dest-section-title">Highlights</h2>
+      <ul class="dest-highlights" id="dest-highlights"></ul>
+    </section>
+  </div>
+
+  <!-- FOOD -->
+  <section class="dest-section">
+    <h2 class="dest-section-title">Food & Cuisine</h2>
+    <div class="dest-food-grid" id="dest-food"></div>
+  </section>
+
+  <!-- BEST TIME -->
+  <section class="dest-section">
+    <h2 class="dest-section-title">Best Time to Visit</h2>
+    <div class="dest-months" id="dest-months"></div>
+  </section>
+
+  <!-- GETTING THERE -->
+  <section class="dest-section">
+    <h2 class="dest-section-title">Getting There</h2>
+    <div class="dest-transport-grid" id="dest-transport"></div>
+  </section>
+
+  <!-- COST ESTIMATE -->
+  <section class="dest-section" id="cost-section" style="display:none">
+    <h2 class="dest-section-title">Cost Estimate</h2>
+    <div id="dest-cost"></div>
+  </section>
+
+  <!-- AI TRAVEL PLAN -->
+  <section class="dest-section">
+    <div class="dest-plan-header">
+      <h2 class="dest-section-title">AI Travel Plan</h2>
+      <div class="dest-plan-controls">
+        <label class="plan-ctrl-label">Days</label>
+        <input type="number" id="plan-days" value="5" min="1" max="20" class="plan-ctrl-input" />
+        <label class="plan-ctrl-label">Budget/day</label>
+        <input type="number" id="plan-budget" value="2000" min="500" step="500" class="plan-ctrl-input wide" />
+        <select id="plan-group" class="plan-ctrl-select">
+          <option value="solo">Solo</option>
+          <option value="couple">Couple</option>
+          <option value="friends" selected>Friends</option>
+          <option value="family">Family</option>
+        </select>
+        <button class="btn-generate-plan" id="btn-generate-plan" onclick="generatePlan()">Generate Plan</button>
+      </div>
+    </div>
+    <div class="dest-plan-output" id="dest-plan-output">
+      <p class="plan-hint">Set your preferences above and click Generate Plan.</p>
+    </div>
+  </section>
+
+</main>
+
+<!-- LIGHTBOX -->
+<div class="dest-lightbox" id="dest-lightbox" style="display:none" onclick="closeLightbox()">
+  <button class="lightbox-nav left" onclick="event.stopPropagation();lightboxNav(-1)">&#8592;</button>
+  <img class="lightbox-img" id="lightbox-img" src="" alt="" onclick="event.stopPropagation()" />
+  <button class="lightbox-nav right" onclick="event.stopPropagation();lightboxNav(1)">&#8594;</button>
+  <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="destination.js"></script>
+</body>
+</html>

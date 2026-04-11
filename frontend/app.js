@@ -425,6 +425,7 @@ function topPickCard(dest, rank) {
         ${isSaved(dest.id) ? "★ Saved" : "☆ Save"}
       </button>
       ${photos.length ? `<button class="btn-photos" onclick="openGallery('${dest.id}','${dest.name}')">📷 Photos</button>` : ""}
+      <a class="btn-photos" href="/destination.html?id=${dest.id}" target="_blank">🔗 Full Details</a>
       ${_searchMode === "discover" ? `<button class="btn-been-there" onclick="crossOffTopPick('${dest.id}')" title="Already visited — show me the next option">✓ Been there</button>` : ""}
     </div>
   </div>`;
