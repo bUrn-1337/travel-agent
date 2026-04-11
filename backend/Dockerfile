@@ -12,6 +12,9 @@ RUN pip install --no-cache-dir \
     torch==2.3.1+cpu \
     --index-url https://download.pytorch.org/whl/cpu
 
+# Pin transformers to stable 4.x (transformers 5.x has known bugs)
+RUN pip install --no-cache-dir "transformers>=4.41.0,<5.0.0"
+
 # Install remaining Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

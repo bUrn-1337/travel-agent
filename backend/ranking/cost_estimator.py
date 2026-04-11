@@ -115,11 +115,11 @@ def _transport_options(dest: dict, user_lat=None, user_lon=None) -> tuple[list[d
 
     # ── Bus ──────────────────────────────────────────────────────────────────
     if dist_km < 800:
-        fare = max(200, int(dist_km * 0.55))
+        fare = max(150, int(dist_km * 1.8))
         options.append({
             "mode":            "Bus",
             "route":           "State / private bus (direct or via nearest city)",
-            "duration":        f"~{max(3, dist_km // 50)}h",
+            "duration":        f"~{max(2, dist_km // 55)}h",
             "one_way_cost_inr": fare,
             "notes":           "Volvo AC sleeper available on popular routes.",
         })

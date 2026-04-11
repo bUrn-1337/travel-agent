@@ -46,9 +46,18 @@ document.addEventListener("DOMContentLoaded", () => {
   renderVibeChips();
   bindRangeSliders();
   bindRadioButtons();
-  initMap();
   bindFilterChips();
   renderSavedSection();
+
+  // Lazy-load map when it scrolls into view (shown after first search)
+  const mapSection = document.getElementById("map-section");
+  const mapObserver = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting && !_map) {
+      initMap();
+      mapObserver.disconnect();
+    }
+  }, { threshold: 0.1 });
+  if (mapSection) mapObserver.observe(mapSection);
 });
 
 function renderVibeChips() {
@@ -262,10 +271,13 @@ function renderComparisonTable(topPicks, searchPayload) {
       }),
     },
     {
-      label: "Transport (return)",
+      label: "Transport (round trip)",
       cells: topPicks.map(d => {
-        const v = d.cost_estimate?.per_person?.transport_return || 0;
-        return `<td>₹${v.toLocaleString("en-IN")}</td>`;
+        const v    = d.cost_estimate?.per_person?.transport_return || 0;
+        const opts = d.cost_estimate?.transport_options || [];
+        const cheapest = opts.length ? opts.reduce((a, b) => a.one_way_cost_inr < b.one_way_cost_inr ? a : b) : null;
+        const mode = cheapest ? `<br><span style="font-size:.72rem;color:var(--muted)">${cheapest.mode}</span>` : "";
+        return `<td>₹${v.toLocaleString("en-IN")}${mode}</td>`;
       }),
     },
     {
@@ -343,7 +355,7 @@ function topPickCard(dest, rank) {
 
   return `
   <div class="top-pick-card" id="pick-card-${dest.id}">
-    <div class="top-pick-hero">
+    <div class="top-pick-hero" data-vibe="${dest.primary_vibe || ''}">
       <div class="pick-rank">#${rank} Best Match</div>
       <div class="pick-name">${dest.name}</div>
       <div class="pick-state">${dest.state} · ${dest.region}</div>
@@ -468,6 +480,10 @@ function renderResults(destinations, queryInfo) {
 
   section.style.display = "block";
 
+  // Show map section after first search (lazy init triggers via IntersectionObserver)
+  const mapSection = document.getElementById("map-section");
+  if (mapSection) mapSection.style.display = "block";
+
   if (queryInfo) {
     const sem = queryInfo.semantic_enabled ? " · semantic search on" : " · keyword search only";
     title.textContent = `${destinations.length} destinations found${sem}`;
@@ -508,7 +524,7 @@ function destinationCard(dest, rank) {
 
   return `
   <div class="result-card" onclick="showModal(${JSON.stringify(dest).replace(/"/g, '&quot;')})">
-    <div class="card-header">
+    <div class="card-header" data-vibe="${dest.primary_vibe || ''}">
       <div class="card-rank">#${rank}</div>
       <div class="card-name">${dest.name}</div>
       <div class="card-state">${dest.state} · ${dest.region}</div>
@@ -1285,6 +1301,7 @@ function hideLoader()  { document.getElementById("loader").style.display = "none
 function hideResults() {
   document.getElementById("results-section").style.display = "none";
   document.getElementById("top-picks-section").style.display = "none";
+  document.getElementById("map-section").style.display = "none";
 }
 function showError(msg) {
   const el = document.getElementById("error-msg");
