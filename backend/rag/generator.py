@@ -282,6 +282,90 @@ def generate_plan(
     yield from _format_chunks_fallback(chunks, destination_name, days, group_type)
 
 
+# ── Packing list ─────────────────────────────────────────────────────────────
+
+def _build_packing_prompt(
+    destination_name: str,
+    state: str,
+    days: int,
+    group_type: str,
+    vibes: list[str],
+    travel_month: int,
+) -> str:
+    from datetime import datetime
+    MONTHS = ["","January","February","March","April","May","June",
+              "July","August","September","October","November","December"]
+    month_name = MONTHS[travel_month] if 1 <= travel_month <= 12 else MONTHS[datetime.now().month]
+    vibe_str = ", ".join(vibes) if vibes else "general sightseeing"
+
+    return f"""You are an expert Indian travel packer. Generate a practical packing list for this trip.
+
+TRIP:
+- Destination: {destination_name}, {state}
+- Duration: {days} days
+- Travel month: {month_name}
+- Group: {group_type}
+- Vibes: {vibe_str}
+
+Generate a concise packing list with these sections. Each item should be on its own line with a checkbox (- [ ]).
+Tailor items specifically to the destination climate, activities, and season.
+
+## 👗 Clothing
+(season-appropriate, activity-specific)
+
+## 🪪 Documents & Money
+(IDs, bookings, cards)
+
+## 🎒 Gear & Accessories
+(destination/vibe specific — e.g. trekking poles for mountains, snorkel for beach)
+
+## 🧴 Toiletries & Health
+(essentials + destination-specific, e.g. altitude sickness pills for mountains)
+
+## 📱 Electronics
+(power banks, adapters, offline maps)
+
+## 🍫 Snacks & Extras
+(travel snacks, misc)
+
+Keep each section tight — 6–10 items max. Skip generic obvious items. Be specific to {destination_name} in {month_name}."""
+
+
+def generate_packing_list(
+    destination_name: str,
+    state: str,
+    days: int,
+    group_type: str,
+    vibes: list[str],
+    travel_month: int = 0,
+) -> Generator[str, None, None]:
+    """Stream a packing list for the given destination and trip details."""
+    groq_key   = os.getenv("GROQ_API_KEY", "").strip()
+    gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
+
+    prompt = _build_packing_prompt(destination_name, state, days, group_type, vibes, travel_month)
+
+    if groq_key:
+        try:
+            yield from _stream_groq(prompt, groq_key)
+            return
+        except Exception as e:
+            logger.warning(f"Groq failed for packing list ({e}), trying Gemini")
+
+    if gemini_key:
+        try:
+            yield from _stream_gemini(prompt, gemini_key)
+            return
+        except Exception as e:
+            logger.warning(f"Gemini failed for packing list ({e})")
+
+    # Minimal static fallback
+    yield f"# Packing List — {destination_name}\n\n"
+    yield "## 👗 Clothing\n- [ ] Comfortable walking shoes\n- [ ] Weather-appropriate layers\n\n"
+    yield "## 🪪 Documents\n- [ ] ID / Passport\n- [ ] Hotel bookings\n- [ ] Travel insurance\n\n"
+    yield "## 🎒 Gear\n- [ ] Backpack\n- [ ] Water bottle\n- [ ] Sunscreen\n\n"
+
+
 # ── JSON prompt builder ──────────────────────────────────────────────────────
 
 def _build_json_prompt(

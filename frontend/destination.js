@@ -3,17 +3,31 @@ const API_BASE = window.location.port === "3000" || window.location.port === "80
 
 const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-let _destData   = null;
-let _heroPhotos = [];
-let _heroIdx    = 0;
-let _galleryPhotos = [];
-let _lightboxIdx   = 0;
-let _planController = null;
+let _destData        = null;
+let _heroPhotos      = [];
+let _heroIdx         = 0;
+let _galleryPhotos   = [];
+let _lightboxIdx     = 0;
+let _planController  = null;
+let _lastPlanMarkdown = "";   // raw markdown from last successful plan generation
 
 /* ===== INIT ===== */
-const destId = new URLSearchParams(window.location.search).get("id");
+const _urlParams = new URLSearchParams(window.location.search);
+const destId     = _urlParams.get("id");
 
-document.addEventListener("DOMContentLoaded", () => { TravelAuth.init(); });
+document.addEventListener("DOMContentLoaded", () => {
+  TravelAuth.init();
+  // Pre-fill plan controls from URL params (passed by lookup tab)
+  const days   = _urlParams.get("days");
+  const budget = _urlParams.get("budget");
+  const group  = _urlParams.get("group");
+  if (days)   { const el = document.getElementById("plan-days");   if (el) el.value = days; }
+  if (budget) { const el = document.getElementById("plan-budget"); if (el) el.value = budget; }
+  if (group)  {
+    const el = document.getElementById("plan-group");
+    if (el) el.value = group;
+  }
+});
 
 if (!destId) {
   document.body.innerHTML = `<div style="padding:4rem;text-align:center;color:#f87171">
@@ -43,6 +57,14 @@ async function loadDestination(id) {
   document.title = `TravelMind — ${_destData.name}`;
   renderHero();
   renderMain();
+
+  // Auto-generate plan only when explicitly coming from the lookup tab
+  if (_urlParams.get("autoplan") === "1") {
+    setTimeout(() => {
+      document.getElementById("btn-generate-plan")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      generatePlan();
+    }, 600);
+  }
 }
 
 /* ===== HERO ===== */
@@ -102,6 +124,7 @@ function renderMain() {
   renderFood();
   renderMonths();
   renderTransport();
+  loadSimilar();
 }
 
 function renderGallery() {
@@ -134,7 +157,9 @@ function renderOverview() {
     ["State",       d.state],
     ["Best for",    `${d.min_days}–${d.max_days} days`],
     ["Avg cost",    `₹${(d.avg_cost_mid||0).toLocaleString("en-IN")}/day`],
-    ["Group type",  (d.group_suitability || []).join(", ") || "—"],
+    ["Group type",  Array.isArray(d.group_suitability)
+      ? d.group_suitability.join(", ")
+      : Object.entries(d.group_suitability || {}).filter(([,v]) => v >= 0.75).map(([k]) => k).join(", ") || "—"],
     ["Popularity",  popularity],
   ].map(([label, value]) => `
     <div class="dest-stat">
@@ -179,21 +204,57 @@ function renderMonths() {
 }
 
 function renderTransport() {
-  const d = _destData;
-  const items = [
-    d.nearest_airport  ? { mode: "✈ Airport",  info: d.nearest_airport }  : null,
-    d.nearest_railway  ? { mode: "🚂 Railway",  info: d.nearest_railway }  : null,
-    d.nearest_bus_stand? { mode: "🚌 Bus Stand", info: d.nearest_bus_stand }: null,
-  ].filter(Boolean);
+  const el = document.getElementById("dest-transport");
+  el.innerHTML = `<p class="transport-loading">📍 Detecting your location for travel options…</p>`;
 
-  document.getElementById("dest-transport").innerHTML = items.length
-    ? items.map(t => `
-        <div class="dest-transport-card">
-          <div class="dest-transport-mode">${t.mode}</div>
-          <div class="dest-transport-info">${t.info}</div>
-        </div>
-      `).join("")
-    : `<p style="color:var(--muted);font-size:.85rem">No transport info available.</p>`;
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      pos => fetchTravelOptions(pos.coords.latitude, pos.coords.longitude),
+      ()  => fetchTravelOptions(null, null),
+      { timeout: 5000 }
+    );
+  } else {
+    fetchTravelOptions(null, null);
+  }
+}
+
+async function fetchTravelOptions(lat, lon) {
+  const el = document.getElementById("dest-transport");
+  let url = `${API_BASE}/api/destinations/${destId}/travel`;
+  if (lat != null) url += `?lat=${lat}&lon=${lon}`;
+
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+    const fromLabel = lat != null ? "your location" : "Delhi (default)";
+
+    el.innerHTML = `
+      <p class="transport-origin">Routes from <strong>${fromLabel}</strong> · ~${data.dist_km.toLocaleString("en-IN")} km away</p>
+      <div class="dest-transport-grid">
+        ${data.transport_options.map(t => `
+          <div class="dest-transport-card">
+            <div class="dest-transport-mode">${modeIcon(t.mode)} ${t.mode}</div>
+            <div class="dest-transport-route">${t.route}</div>
+            <div class="dest-transport-meta">
+              <span class="transport-duration">⏱ ${t.duration}</span>
+              <span class="transport-cost">₹${t.one_way_cost_inr.toLocaleString("en-IN")} one-way</span>
+            </div>
+            <div class="dest-transport-note">${t.notes}</div>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  } catch {
+    el.innerHTML = `<p style="color:var(--muted);font-size:.85rem">Could not load travel options.</p>`;
+  }
+}
+
+function modeIcon(mode) {
+  if (mode.toLowerCase().includes("flight")) return "✈";
+  if (mode.toLowerCase().includes("train"))  return "🚂";
+  if (mode.toLowerCase().includes("bus"))    return "🚌";
+  if (mode.toLowerCase().includes("drive") || mode.toLowerCase().includes("cab")) return "🚗";
+  return "🗺";
 }
 
 /* ===== AI PLAN ===== */
@@ -218,6 +279,7 @@ async function generatePlan() {
 
   let raw = "";
 
+  let success = false;
   try {
     const resp = await fetch(`${API_BASE}/api/generate`, {
       method:  "POST",
@@ -254,25 +316,28 @@ async function generatePlan() {
         output.innerHTML = badgeHTML + (typeof marked !== "undefined" ? marked.parse(raw) : raw);
       }
     }
+    _lastPlanMarkdown = raw;
+    success = true;
   } catch (err) {
     if (err.name === "AbortError") return;
     output.innerHTML = `<p style="color:#f87171">Failed to generate plan — <button class="btn-retry-plan" onclick="generatePlan()">↺ Retry</button></p>`;
-    // Show save trip button after plan generation
-    if (TravelAuth.isLoggedIn()) {
-      const controls = document.querySelector(".dest-plan-controls");
-      if (controls && !document.getElementById("btn-save-dest-trip")) {
-        const saveBtn = document.createElement("button");
-        saveBtn.id = "btn-save-dest-trip";
-        saveBtn.className = "btn-generate-plan";
-        saveBtn.style.cssText = "background:none;border:1.5px solid var(--accent);color:var(--accent);";
-        saveBtn.textContent = "💾 Save Trip";
-        saveBtn.onclick = saveDestTrip;
-        controls.appendChild(saveBtn);
-      }
-    }
   } finally {
     btn.disabled = false;
     btn.textContent = "Generate Plan";
+  }
+
+  // Show Save Trip button after a successful generation
+  if (success && TravelAuth.isLoggedIn()) {
+    const controls = document.querySelector(".dest-plan-controls");
+    if (controls && !document.getElementById("btn-save-dest-trip")) {
+      const saveBtn = document.createElement("button");
+      saveBtn.id = "btn-save-dest-trip";
+      saveBtn.className = "btn-generate-plan";
+      saveBtn.style.cssText = "background:none;border:1.5px solid var(--accent);color:var(--accent);";
+      saveBtn.textContent = "💾 Save Trip";
+      saveBtn.onclick = saveDestTrip;
+      controls.appendChild(saveBtn);
+    }
   }
 }
 
@@ -283,7 +348,7 @@ async function saveDestTrip() {
   const days   = parseInt(document.getElementById("plan-days").value) || 5;
   const budget = parseInt(document.getElementById("plan-budget").value) || 2000;
   const group  = document.getElementById("plan-group").value;
-  const planMd = document.getElementById("dest-plan-output")?.innerText || "";
+  const planMd = _lastPlanMarkdown || "";
 
   const id = await TravelAuth.saveTrip({
     destination:  _destData,
@@ -367,3 +432,122 @@ document.addEventListener("keydown", e => {
     if (e.key === "Escape")     closeLightbox();
   }
 });
+
+/* ===== SIMILAR DESTINATIONS ===== */
+async function loadSimilar() {
+  try {
+    const resp = await fetch(`${API_BASE}/api/destinations/${destId}/similar?n=3`);
+    if (!resp.ok) return;
+    const similar = await resp.json();
+    if (!similar.length) return;
+
+    // Fetch a photo for each
+    const withPhotos = await Promise.all(similar.map(async d => {
+      try {
+        const pr = await fetch(`${API_BASE}/api/photos/${d.id}?count=1`);
+        const pd = pr.ok ? await pr.json() : {};
+        return { ...d, photo: (pd.photo_urls || [])[0] || null };
+      } catch { return { ...d, photo: null }; }
+    }));
+
+    const section = document.getElementById("similar-section");
+    const grid    = document.getElementById("similar-grid");
+    section.style.display = "block";
+
+    grid.innerHTML = withPhotos.map(d => {
+      const inSeason = (d.best_months || []).includes(new Date().getMonth() + 1);
+      const photoStyle = d.photo
+        ? `style="background-image:url('${d.photo}');background-size:cover;background-position:center"`
+        : "";
+      return `
+        <a class="similar-card" href="/destination.html?id=${d.id}">
+          <div class="similar-card-hero ${d.photo ? 'has-photo' : ''}" data-vibe="${d.primary_vibe || ''}" ${photoStyle}>
+            <div class="similar-card-overlay"></div>
+            <div class="similar-card-name">${d.name}</div>
+            <div class="similar-card-state">${d.state}</div>
+          </div>
+          <div class="similar-card-body">
+            <span class="dest-vibe-tag primary" style="font-size:.7rem">${d.primary_vibe || ''}</span>
+            <span class="dest-vibe-tag" style="font-size:.7rem">${inSeason ? '✓ In season' : '⚠ Off season'}</span>
+            <div class="similar-card-cost">₹${(d.avg_cost_mid||0).toLocaleString('en-IN')}/day</div>
+          </div>
+        </a>`;
+    }).join("");
+  } catch { /* silent fail */ }
+}
+
+/* ===== PACKING LIST ===== */
+let _packingController = null;
+
+async function generatePackingList() {
+  if (!_destData) return;
+
+  const btn    = document.getElementById("btn-packing-list");
+  const output = document.getElementById("packing-output");
+  const days   = parseInt(document.getElementById("plan-days").value) || 5;
+  const group  = document.getElementById("plan-group").value;
+  const month  = new Date().getMonth() + 1;
+
+  if (_packingController) _packingController.abort();
+  _packingController = new AbortController();
+
+  btn.disabled    = true;
+  btn.textContent = "Generating…";
+  output.innerHTML = `<div class="plan-loading-row"><div class="plan-spinner"></div><span>Building your packing list…</span></div>`;
+
+  let raw = "";
+  try {
+    const resp = await fetch(`${API_BASE}/api/packing-list`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        destination_id: _destData.id,
+        days, group_type: group,
+        vibes: _destData.vibes || [],
+        travel_month: month,
+      }),
+      signal: _packingController.signal,
+    });
+
+    if (!resp.ok) throw new Error(`${resp.status}`);
+
+    output.innerHTML = "";
+    const reader  = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const token = line.slice(6);
+        if (token === "[DONE]") break;
+        raw += token.replace(/\\n/g, "\n");
+        output.innerHTML = (typeof marked !== "undefined" ? marked.parse(raw) : raw);
+      }
+    }
+
+    // Add copy button after generation
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "btn-copy-packing";
+    copyBtn.textContent = "📋 Copy List";
+    copyBtn.onclick = () => {
+      navigator.clipboard.writeText(raw).then(() => {
+        copyBtn.textContent = "✓ Copied!";
+        setTimeout(() => { copyBtn.textContent = "📋 Copy List"; }, 2000);
+      });
+    };
+    output.appendChild(copyBtn);
+
+  } catch (err) {
+    if (err.name === "AbortError") return;
+    output.innerHTML = `<p style="color:#f87171">Failed — <button class="btn-retry-plan" onclick="generatePackingList()">↺ Retry</button></p>`;
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = "🎒 Regenerate";
+  }
+}

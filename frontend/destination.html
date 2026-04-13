@@ -94,6 +94,25 @@
     <div id="dest-cost"></div>
   </section>
 
+  <!-- PACKING LIST -->
+  <section class="dest-section" id="packing-section">
+    <div class="dest-plan-header">
+      <h2 class="dest-section-title">Packing List</h2>
+      <div class="dest-plan-controls">
+        <button class="btn-generate-plan" id="btn-packing-list" onclick="generatePackingList()">🎒 Generate Packing List</button>
+      </div>
+    </div>
+    <div class="dest-plan-output" id="packing-output">
+      <p class="plan-hint">Click to get a personalised packing list based on your trip settings.</p>
+    </div>
+  </section>
+
+  <!-- SIMILAR DESTINATIONS -->
+  <section class="dest-section" id="similar-section" style="display:none">
+    <h2 class="dest-section-title">You Might Also Like</h2>
+    <div class="similar-grid" id="similar-grid"></div>
+  </section>
+
   <!-- AI TRAVEL PLAN -->
   <section class="dest-section">
     <div class="dest-plan-header">

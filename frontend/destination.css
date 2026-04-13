@@ -259,12 +259,36 @@
   padding: .85rem 1rem;
 }
 .dest-transport-mode {
-  font-size: .7rem; font-weight: 700;
+  font-size: .78rem; font-weight: 700;
   color: var(--accent); text-transform: uppercase;
-  letter-spacing: .06em; margin-bottom: .35rem;
+  letter-spacing: .06em; margin-bottom: .3rem;
+}
+.dest-transport-route {
+  font-size: .88rem; color: var(--text); font-weight: 500;
+  margin-bottom: .4rem;
+}
+.dest-transport-meta {
+  display: flex; gap: .75rem; margin-bottom: .35rem;
+  flex-wrap: wrap;
+}
+.transport-duration, .transport-cost {
+  font-size: .78rem; color: var(--muted);
+}
+.transport-cost {
+  color: var(--accent); font-weight: 600;
+}
+.dest-transport-note {
+  font-size: .75rem; color: var(--muted); line-height: 1.4;
+  border-top: 1px solid var(--border); padding-top: .35rem; margin-top: .25rem;
 }
 .dest-transport-info {
   font-size: .82rem; color: var(--text-2); line-height: 1.5;
+}
+.transport-loading {
+  color: var(--muted); font-size: .85rem; padding: .5rem 0;
+}
+.transport-origin {
+  font-size: .82rem; color: var(--muted); margin-bottom: .75rem;
 }
 
 /* ===== COST ===== */
@@ -409,3 +433,68 @@
   display: flex; align-items: center; justify-content: center;
 }
 .lightbox-close:hover { background: rgba(255,255,255,.2); }
+
+/* ===== SIMILAR DESTINATIONS ===== */
+.similar-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+@media (max-width: 700px) { .similar-grid { grid-template-columns: 1fr; } }
+
+.similar-card {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  text-decoration: none;
+  display: flex; flex-direction: column;
+  transition: transform .18s, box-shadow .18s;
+}
+.similar-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+}
+.similar-card-hero {
+  height: 130px;
+  position: relative;
+  background: var(--bg-2);
+}
+.similar-card-hero.has-photo { background-size: cover; background-position: center; }
+.similar-card-hero[data-vibe="mountains"]:not(.has-photo) { background: linear-gradient(135deg,#1e3a5f,#0f172a); }
+.similar-card-hero[data-vibe="beach"]:not(.has-photo)     { background: linear-gradient(135deg,#0c4a6e,#164e63); }
+.similar-card-hero[data-vibe="heritage"]:not(.has-photo)  { background: linear-gradient(135deg,#451a03,#78350f); }
+.similar-card-hero[data-vibe="nature"]:not(.has-photo)    { background: linear-gradient(135deg,#14532d,#052e16); }
+.similar-card-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,.7) 0%, rgba(0,0,0,.1) 60%);
+}
+.similar-card-name {
+  position: absolute; bottom: .5rem; left: .75rem;
+  font-size: .95rem; font-weight: 700; color: #fff;
+}
+.similar-card-state {
+  position: absolute; bottom: .5rem; right: .75rem;
+  font-size: .7rem; color: rgba(255,255,255,.75);
+}
+.similar-card-body {
+  padding: .6rem .75rem;
+  display: flex; align-items: center; gap: .4rem; flex-wrap: wrap;
+}
+.similar-card-cost {
+  margin-left: auto;
+  font-size: .75rem; font-weight: 600; color: var(--accent);
+}
+
+/* ===== PACKING LIST ===== */
+.btn-copy-packing {
+  display: inline-flex; align-items: center; gap: .4rem;
+  margin-top: 1.25rem;
+  padding: .45rem 1rem;
+  background: none;
+  border: 1.5px solid var(--border-2);
+  border-radius: 8px;
+  color: var(--muted); font-size: .82rem; font-weight: 600;
+  cursor: pointer; transition: all .15s;
+}
+.btn-copy-packing:hover { border-color: var(--accent); color: var(--accent); }

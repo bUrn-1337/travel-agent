@@ -1002,55 +1002,66 @@ function _populateDatalist() {
     .join("");
 }
 
-function lookupDestination() {
-  _searchMode = "lookup";
+async function lookupDestination() {
   const input = document.getElementById("dest-lookup-input");
   const val   = (input?.value || "").trim();
   if (!val) return;
 
-  // Match against loaded geo list
-  const match = _allGeo.find(d =>
+  const days   = document.getElementById("lookup-days")?.value   || 5;
+  const budget = document.getElementById("lookup-budget")?.value || 2000;
+  const group  = document.querySelector("input[name='lookup-group']:checked")?.value || "friends";
+
+  // Ensure geo list is loaded
+  if (!_allGeo.length) await loadDestAutocomplete();
+
+  // Try exact match first, then partial
+  let match = _allGeo.find(d =>
     d.name.toLowerCase() === val.toLowerCase() ||
     `${d.name}, ${d.state}`.toLowerCase() === val.toLowerCase()
   );
-
-  // Sync lookup tab values into the discover form before searching
-  const lookupCity   = document.getElementById("lookup-city");
-  if (lookupCity?.value.trim()) {
-    const cityEl = document.getElementById("city");
-    if (cityEl) cityEl.value = lookupCity.value.trim();
+  if (!match) {
+    match = _allGeo.find(d => d.name.toLowerCase().startsWith(val.toLowerCase()));
   }
 
-  const lookupDays   = document.getElementById("lookup-days");
-  const lookupBudget = document.getElementById("lookup-budget");
-  const lookupGroup  = document.querySelector("input[name='lookup-group']:checked");
-
-  if (lookupDays) {
-    const daysEl = document.getElementById("days");
-    if (daysEl) { daysEl.value = lookupDays.value; document.getElementById("days-val").textContent = lookupDays.value; }
+  if (match) {
+    // Direct navigation — no need to show 3 results when user knows where to go
+    const params = new URLSearchParams({ id: match.id, days, budget, group, autoplan: 1 });
+    window.location.href = `/destination.html?${params}`;
+    return;
   }
-  if (lookupBudget) {
-    const budgetEl = document.getElementById("budget");
-    if (budgetEl) {
-      budgetEl.value = lookupBudget.value;
-      document.getElementById("budget-val").textContent = "₹" + Number(lookupBudget.value).toLocaleString("en-IN");
+
+  // No match found — show loader and do a single-result search
+  const loaderEl = document.getElementById("loader");
+  const errEl    = document.getElementById("error-msg");
+  loaderEl.style.display = "flex";
+  errEl.style.display    = "none";
+
+  try {
+    const resp = await fetch(`${API_BASE}/api/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: val, vibes: [], city: "", days: Number(days),
+        budget_per_day: Number(budget), group_type: group,
+        travel_month: 0, top_k: 5,
+      }),
+    });
+    if (!resp.ok) throw new Error();
+    const data = await resp.json();
+    const best = data.top_picks?.[0] || data.results?.[0];
+    if (best) {
+      const params = new URLSearchParams({ id: best.id, days, budget, group, autoplan: 1 });
+      window.location.href = `/destination.html?${params}`;
+    } else {
+      errEl.style.display = "block";
+      errEl.textContent = `No destination found matching "${val}". Try a different spelling.`;
     }
+  } catch {
+    errEl.style.display = "block";
+    errEl.textContent = "Search failed. Please try again.";
+  } finally {
+    loaderEl.style.display = "none";
   }
-  if (lookupGroup) {
-    const groupEl = document.querySelector(`input[name='group'][value='${lookupGroup.value}']`);
-    if (groupEl) {
-      groupEl.checked = true;
-      document.querySelectorAll(".radio-btn").forEach(l => {
-        l.classList.toggle("active", l.querySelector("input")?.value === lookupGroup.value && l.closest("#tab-discover"));
-      });
-    }
-  }
-
-  // Pre-fill the query field with the destination name
-  const queryEl = document.getElementById("query");
-  if (queryEl) queryEl.value = match ? match.name : val;
-
-  doSearch();
 }
 
 /* ===== SAVE TRIP (P7) ===== */

@@ -76,7 +76,7 @@ function renderTripCard(trip) {
       ${trip.plan_markdown
         ? `<button class="btn-trip-action" onclick="viewPlan('${trip.id}')">📄 View Plan</button>`
         : ""}
-      <a class="btn-trip-action" href="/destination.html?id=${trip.destination_id}" target="_blank">🔗 Destination</a>
+      <a class="btn-trip-action" href="/destination.html?id=${trip.destination_id}&days=${trip.days}&budget=${trip.budget_per_day}&group=${trip.group_type}" target="_blank">🔗 Destination</a>
       ${trip.is_public
         ? `<button class="btn-trip-action accent" onclick="copyShareLink('${trip.id}')">🔗 Copy Link</button>`
         : `<button class="btn-trip-action" onclick="shareTrip('${trip.id}', this)">📤 Share</button>`}

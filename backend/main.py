@@ -11,7 +11,7 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 
 import secrets
-from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi import FastAPI, HTTPException, Request, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, RedirectResponse, JSONResponse
 from pydantic import BaseModel, Field
@@ -24,6 +24,7 @@ from search.minsearch import Index
 from rag.embedder import build_index, semantic_scores
 from rag.vector_store import chunk_count
 from rag.pipeline import stream_travel_plan, get_travel_plan_json
+from rag.generator import generate_packing_list
 from rag.retriever import retrieve_for_plan
 from ranking.scorer import rank_destinations
 from ranking.cost_estimator import estimate_trip_cost
@@ -195,6 +196,68 @@ def get_destination(dest_id: str):
     if not dest:
         raise HTTPException(status_code=404, detail="Destination not found")
     return dest
+
+
+@app.get("/api/destinations/{dest_id}/travel")
+def get_destination_travel(
+    dest_id: str,
+    lat: float = Query(None, description="User latitude"),
+    lon: float = Query(None, description="User longitude"),
+):
+    """
+    Return transport options + distances from user's location to this destination.
+    Falls back to Delhi if no coordinates provided.
+    """
+    dest = next((d for d in DESTINATIONS if d["id"] == dest_id), None)
+    if not dest:
+        raise HTTPException(status_code=404, detail="Destination not found")
+
+    from ranking.cost_estimator import _transport_options, _haversine_km, DELHI_LAT, DELHI_LON
+    options, dist_km = _transport_options(dest, lat, lon)
+    origin_name = "Delhi" if lat is None else f"your location"
+    return {
+        "destination_id":    dest_id,
+        "origin_name":       origin_name,
+        "dist_km":           dist_km,
+        "transport_options": options,
+    }
+
+
+@app.get("/api/destinations/{dest_id}/similar")
+def get_similar_destinations(dest_id: str, n: int = 3):
+    """
+    Return n destinations most similar to the given one.
+    Similarity = weighted vibe Jaccard + same-region bonus + budget proximity.
+    """
+    dest = next((d for d in DESTINATIONS if d["id"] == dest_id), None)
+    if not dest:
+        raise HTTPException(status_code=404, detail="Destination not found")
+
+    dest_vibes  = set(v.lower() for v in dest.get("vibes", []))
+    dest_region = dest.get("region", "")
+    dest_budget = dest.get("avg_cost_mid", 2500)
+
+    scored = []
+    for d in DESTINATIONS:
+        if d["id"] == dest_id:
+            continue
+        # Jaccard similarity on vibes
+        other_vibes = set(v.lower() for v in d.get("vibes", []))
+        union = dest_vibes | other_vibes
+        jaccard = len(dest_vibes & other_vibes) / len(union) if union else 0
+
+        # Same region bonus
+        region_bonus = 0.15 if d.get("region") == dest_region else 0
+
+        # Budget proximity (1.0 = identical, decays with difference)
+        other_budget = d.get("avg_cost_mid", 2500)
+        budget_sim = 1.0 - min(1.0, abs(dest_budget - other_budget) / 3000)
+
+        score = jaccard * 0.6 + budget_sim * 0.25 + region_bonus
+        scored.append((score, d))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [d for _, d in scored[:n]]
 
 
 @app.post("/api/search", response_model=SearchResponse)
@@ -392,6 +455,40 @@ async def generate_structured(req: StructuredRequest):
         "cost_estimate": cost,
         "cached":        ck in _PLAN_CACHE,
     }
+
+
+class PackingListRequest(BaseModel):
+    destination_id: str       = Field(...)
+    days:           int       = Field(default=5, ge=1, le=30)
+    group_type:     str       = Field(default="friends")
+    vibes:          list[str] = Field(default=[])
+    travel_month:   int       = Field(default=0, ge=0, le=12)
+
+
+@app.post("/api/packing-list")
+async def packing_list(req: PackingListRequest):
+    """Stream a packing list for the destination as SSE."""
+    dest = next((d for d in DESTINATIONS if d["id"] == req.destination_id), None)
+    if not dest:
+        raise HTTPException(status_code=404, detail="Destination not found")
+
+    def event_stream():
+        try:
+            for token in generate_packing_list(
+                destination_name=dest["name"],
+                state=dest["state"],
+                days=req.days,
+                group_type=req.group_type,
+                vibes=req.vibes or dest.get("vibes", []),
+                travel_month=req.travel_month,
+            ):
+                safe = token.replace("\n", "\\n")
+                yield f"data: {safe}\n\n"
+        except Exception as e:
+            logger.error(f"Packing list error: {e}")
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 class RefineRequest(BaseModel):

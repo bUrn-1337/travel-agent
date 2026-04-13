@@ -667,7 +667,8 @@ input[type="range"] {
   padding: .65rem 1.75rem;
   border-top: 1px solid var(--border);
   background: var(--bg-2);
-  display: flex; align-items: center; gap: .75rem;
+  display: flex; align-items: center; gap: .5rem;
+  flex-wrap: wrap;
 }
 .btn-save {
   background: none; border: 1.5px solid var(--border-2);
