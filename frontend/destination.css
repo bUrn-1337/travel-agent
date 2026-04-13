@@ -434,6 +434,54 @@
 }
 .lightbox-close:hover { background: rgba(255,255,255,.2); }
 
+/* ===== BOOK YOUR TRIP ===== */
+.book-disclaimer {
+  font-size: .78rem; color: var(--muted);
+  background: rgba(251,191,36,.07);
+  border: 1px solid rgba(251,191,36,.2);
+  border-radius: 8px;
+  padding: .5rem .85rem;
+  margin-bottom: 1.25rem;
+}
+.book-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+@media (max-width: 600px) { .book-grid { grid-template-columns: 1fr; } }
+
+.book-category-label {
+  font-size: .72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--muted);
+  margin-bottom: .6rem;
+}
+.book-links {
+  display: flex; flex-direction: column; gap: .45rem;
+}
+.book-link {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .6rem .85rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--text);
+  font-size: .85rem; font-weight: 500;
+  transition: border-color .15s, background .15s, transform .12s;
+}
+.book-link:hover {
+  border-color: var(--book-color, var(--accent));
+  background: color-mix(in srgb, var(--book-color, var(--accent)) 8%, var(--surface-2));
+  transform: translateX(2px);
+}
+.book-link-icon { font-size: 1rem; width: 1.4rem; text-align: center; }
+.book-link-label { flex: 1; }
+.book-link-arrow {
+  font-size: .8rem; color: var(--muted);
+  transition: color .15s;
+}
+.book-link:hover .book-link-arrow { color: var(--book-color, var(--accent)); }
+
 /* ===== SIMILAR DESTINATIONS ===== */
 .similar-grid {
   display: grid;

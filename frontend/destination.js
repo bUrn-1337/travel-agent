@@ -124,6 +124,7 @@ function renderMain() {
   renderFood();
   renderMonths();
   renderTransport();
+  renderBookLinks();
   loadSimilar();
 }
 
@@ -432,6 +433,88 @@ document.addEventListener("keydown", e => {
     if (e.key === "Escape")     closeLightbox();
   }
 });
+
+/* ===== BOOK YOUR TRIP ===== */
+function renderBookLinks() {
+  const d    = _destData;
+  const name = encodeURIComponent(`${d.name} India`);
+  const city = encodeURIComponent(d.nearest_major_city || d.name);
+
+  // Nearest airport city for flight searches
+  const airportCity = d.nearest_airport
+    ? encodeURIComponent(d.nearest_airport.split("(")[0].trim().replace(/Airport|International/gi,"").trim() || d.nearest_major_city)
+    : city;
+
+  const flights = [
+    {
+      label: "Google Flights",
+      icon: "✈",
+      url: `https://www.google.com/travel/flights?q=flights+to+${airportCity}`,
+      color: "#4285F4",
+    },
+    {
+      label: "Skyscanner",
+      icon: "🔍",
+      url: `https://www.skyscanner.co.in/flights-to/${encodeURIComponent(d.nearest_major_city || d.name)}`,
+      color: "#00B1E1",
+    },
+    {
+      label: "EasyMyTrip",
+      icon: "🎫",
+      url: `https://www.easymytrip.com/flights`,
+      color: "#E73C2B",
+    },
+    {
+      label: "MakeMyTrip",
+      icon: "🛫",
+      url: `https://www.makemytrip.com/flights/`,
+      color: "#D84A34",
+    },
+  ];
+
+  const hotels = [
+    {
+      label: "Google Hotels",
+      icon: "🏨",
+      url: `https://www.google.com/travel/hotels?q=hotels+in+${name}`,
+      color: "#4285F4",
+    },
+    {
+      label: "Booking.com",
+      icon: "🛏",
+      url: `https://www.booking.com/search.html?ss=${name}`,
+      color: "#003580",
+    },
+    {
+      label: "MakeMyTrip",
+      icon: "🏩",
+      url: `https://www.makemytrip.com/hotels/hotel-listing/?city=${city}`,
+      color: "#D84A34",
+    },
+    {
+      label: "Airbnb",
+      icon: "🏡",
+      url: `https://www.airbnb.co.in/s/${name}/homes`,
+      color: "#FF5A5F",
+    },
+  ];
+
+  document.getElementById("book-flights").innerHTML = flights.map(b => `
+    <a class="book-link" href="${b.url}" target="_blank" rel="noopener"
+       style="--book-color:${b.color}">
+      <span class="book-link-icon">${b.icon}</span>
+      <span class="book-link-label">${b.label}</span>
+      <span class="book-link-arrow">↗</span>
+    </a>`).join("");
+
+  document.getElementById("book-hotels").innerHTML = hotels.map(b => `
+    <a class="book-link" href="${b.url}" target="_blank" rel="noopener"
+       style="--book-color:${b.color}">
+      <span class="book-link-icon">${b.icon}</span>
+      <span class="book-link-label">${b.label}</span>
+      <span class="book-link-arrow">↗</span>
+    </a>`).join("");
+}
 
 /* ===== SIMILAR DESTINATIONS ===== */
 async function loadSimilar() {
