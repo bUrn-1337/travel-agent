@@ -38,12 +38,8 @@ h1,h2,h3,h4 { font-family: 'Space Grotesk', 'Inter', sans-serif; }
   position: sticky;
   top: 0;
   z-index: 200;
-  background: rgba(11,15,13,.85);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: rgba(11,15,13,.97);
   border-bottom: 1px solid var(--border);
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
 }
 .navbar-inner {
   max-width: 1200px;
