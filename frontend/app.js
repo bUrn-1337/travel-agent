@@ -964,6 +964,24 @@ function _addNextTopPick() {
     cardEl.style.transform = "translateY(0)";
   }));
 
+  // Fetch photos for newly added card (backend only pre-fetches top-3)
+  if (!next.photo_urls?.length) {
+    fetch(`${API_BASE}/api/photos/${next.id}?count=3`)
+      .then(r => r.json())
+      .then(data => {
+        const urls = data.photo_urls || [];
+        if (!urls.length) return;
+        window._destPhotos = window._destPhotos || {};
+        window._destPhotos[next.id] = { urls, idx: 0 };
+        const hero = document.getElementById(`pick-hero-${next.id}`);
+        if (hero) {
+          hero.style.backgroundImage = `url('${urls[0]}')`;
+          hero.classList.add("has-photo");
+        }
+      })
+      .catch(() => {});
+  }
+
   if (_lastSearchPayload) {
     streamPlanIntoCard(next.id, {
       destination_id: next.id,
