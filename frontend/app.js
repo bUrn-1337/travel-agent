@@ -49,6 +49,51 @@ let selectedVibes = new Set();
 let lastResults = [];
 let lastRequestedVibes = [];
 
+/* ===== RESTORE SEARCH STATE ===== */
+function restoreSearchState() {
+  try {
+    if (!localStorage.getItem('tm_returning')) return;
+    localStorage.removeItem('tm_returning');
+    const raw = localStorage.getItem('tm_search');
+    if (!raw) return;
+    const { payload, data } = JSON.parse(raw);
+
+    // Restore text inputs
+    if (payload.city)         document.getElementById('city').value  = payload.city;
+    if (payload.query)        document.getElementById('query').value = payload.query;
+    if (payload.travel_month) document.getElementById('month').value = payload.travel_month;
+
+    // Restore range sliders + fire input event so badge labels update
+    const daysEl = document.getElementById('days');
+    if (daysEl && payload.days) { daysEl.value = payload.days; daysEl.dispatchEvent(new Event('input')); }
+    const budgetEl = document.getElementById('budget');
+    if (budgetEl && payload.budget_per_day) { budgetEl.value = payload.budget_per_day; budgetEl.dispatchEvent(new Event('input')); }
+
+    // Restore group type radio
+    if (payload.group_type) {
+      const radio = document.querySelector(`input[name="group"][value="${payload.group_type}"]`);
+      if (radio) {
+        radio.checked = true;
+        document.querySelectorAll('.radio-btn').forEach(l => l.classList.remove('active'));
+        radio.closest('.radio-btn')?.classList.add('active');
+      }
+    }
+
+    // Restore vibes
+    selectedVibes = new Set(payload.vibes || []);
+    document.querySelectorAll('.vibe-chip').forEach(btn => {
+      btn.classList.toggle('active', selectedVibes.has(btn.dataset.id));
+    });
+
+    // Restore results
+    lastResults        = data.destinations;
+    lastRequestedVibes = payload.vibes || [];
+    _searchMode        = "discover";
+    renderTopPicks(data.top_picks, data.query_info, payload);
+    renderResults(lastResults, data.query_info);
+  } catch {}
+}
+
 /* ===== INIT ===== */
 document.addEventListener("DOMContentLoaded", () => {
   TravelAuth.init();
@@ -58,6 +103,8 @@ document.addEventListener("DOMContentLoaded", () => {
   bindFilterChips();
   renderSavedSection();
   loadDestAutocomplete();
+
+  restoreSearchState();
 
   // Lazy-load map when it scrolls into view (shown after first search)
   const mapSection = document.getElementById("map-section");
@@ -115,23 +162,54 @@ function getGroupType() {
   return checked ? checked.value : "friends";
 }
 
+/* ===== GEOCODING ===== */
+async function geocodeCity(cityName) {
+  try {
+    const resp = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cityName + ', India')}&format=json&limit=1`,
+      { headers: { 'Accept-Language': 'en' } }
+    );
+    const data = await resp.json();
+    if (data.length > 0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+  } catch {}
+  return null;
+}
+
+async function reverseGeocode(lat, lon) {
+  try {
+    const resp = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
+      { headers: { 'Accept-Language': 'en' } }
+    );
+    const data = await resp.json();
+    const a = data.address || {};
+    const name = a.city || a.town || a.municipality || a.village || a.suburb || a.county;
+    if (name) return name;
+    if (data.display_name) return data.display_name.split(',')[0].trim();
+  } catch {}
+  return null;
+}
+
 /* ===== GPS ===== */
 function _requestGPS(btn, status) {
   if (!navigator.geolocation) {
     status.textContent = "Geolocation not supported.";
     return;
   }
-  btn.textContent = "⏳";
+  status.textContent = `📍 Locating...`;
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       _userLat = pos.coords.latitude;
       _userLon = pos.coords.longitude;
-      btn.textContent = "✅";
-      btn.classList.add("active");
-      status.textContent = `GPS: ${_userLat.toFixed(3)}, ${_userLon.toFixed(3)}`;
+      const timeout = new Promise(r => setTimeout(() => r(null), 3000));
+      Promise.race([reverseGeocode(_userLat, _userLon), timeout]).then(name => {
+        status.textContent = name
+          ? `📍 ${name}`
+          : `GPS: ${_userLat.toFixed(3)}, ${_userLon.toFixed(3)}`;
+        btn.classList.add("active");
+      });
     },
     () => {
-      btn.textContent = "📍";
       status.textContent = "Location denied — distance scoring disabled.";
       _userLat = null;
       _userLon = null;
@@ -164,6 +242,14 @@ async function doSearch() {
   const query  = document.getElementById("query").value.trim();
   const topK   = parseInt(document.getElementById("top-k").value);
 
+  // If no GPS but a city was typed, geocode it for distance ranking
+  let searchLat = _userLat;
+  let searchLon = _userLon;
+  if (searchLat === null && city) {
+    const coords = await geocodeCity(city);
+    if (coords) { searchLat = coords.lat; searchLon = coords.lon; }
+  }
+
   const payload = {
     city,
     vibes:          [...selectedVibes],
@@ -173,8 +259,8 @@ async function doSearch() {
     query,
     travel_month:   month,
     top_k:          topK,
-    user_lat:       _userLat,
-    user_lon:       _userLon,
+    user_lat:       searchLat,
+    user_lon:       searchLon,
   };
 
   // Cancel any previous generation streams
@@ -206,6 +292,9 @@ async function doSearch() {
 
     // P4: reset filters on new search
     resetFilters();
+
+    // Save state so Back to Search restores the results
+    try { localStorage.setItem('tm_search', JSON.stringify({ payload, data })); } catch {}
 
     // Render top picks with auto-generation
     renderTopPicks(data.top_picks, data.query_info, payload);
@@ -426,7 +515,7 @@ function topPickCard(dest, rank) {
         ${isSaved(dest.id) ? "★ Saved" : "☆ Save"}
       </button>
       ${photos.length ? `<button class="btn-photos" onclick="openGallery('${dest.id}','${dest.name}')">📷 Photos</button>` : ""}
-      <a class="btn-photos" href="/destination.html?id=${dest.id}" target="_blank">🔗 Full Details</a>
+      <a class="btn-photos" href="/destination.html?id=${dest.id}">🔗 Full Details</a>
       ${_searchMode === "discover" ? `<button class="btn-been-there" onclick="crossOffTopPick('${dest.id}')" title="Already visited — show me the next option">✓ Been there</button>` : ""}
     </div>
   </div>`;

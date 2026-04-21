@@ -1,6 +1,9 @@
 const API_BASE = window.location.port === "3000" || window.location.port === "80" || window.location.port === ""
   ? "" : "http://localhost:8000";
 
+// Flag so the homepage knows to restore search results when user clicks Back to Search
+localStorage.setItem('tm_returning', '1');
+
 const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 let _destData        = null;
