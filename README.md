@@ -62,7 +62,7 @@ FRONTEND_URL=http://localhost:3000
 ```
 
 Getting API keys:
-- **Groq**: [console.groq.com](https://console.groq.com) → Create API Key (free, no card erquired)
+- **Groq**: [console.groq.com](https://console.groq.com) → Create API Key (free, no card required)
 - **Gemini**: [aistudio.google.com](https://aistudio.google.com) → Get API Key (free)
 - **Pexels**: [pexels.com/api](https://www.pexels.com/api/) → Your API Key (free)
 - **Google OAuth**: [console.cloud.google.com](https://console.cloud.google.com) → APIs & Services → Credentials → OAuth 2.0 Client ID → Authorised redirect URI: `http://localhost:3000/auth/google/callback`
