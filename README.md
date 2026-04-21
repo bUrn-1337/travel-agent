@@ -38,6 +38,7 @@ docker compose exec backend python3 ingest.py
 
 Create a `.env` file in the project root:
 
+
 ```env
 # LLM — at least one required for AI plan generation
 GROQ_API_KEY=gsk_...           # https://console.groq.com — free tier
