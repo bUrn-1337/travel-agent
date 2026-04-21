@@ -1,6 +1,7 @@
 # TravelMind
 
 AI-powered India travel recommendation and planning app — hybrid search, RAG itinerary generation, 521 destinations.
+Github link :- [https://github.com/bUrn-1337/travel-agent/](url)
 
 ---
 
